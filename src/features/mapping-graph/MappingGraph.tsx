@@ -1,7 +1,8 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useGraphemePhoneme } from '../../hooks/useData';
 import { useAudio } from '../../hooks/useAudio';
+import { normalize } from '../../lib/ipa/normalize';
+import type { Inventory } from '../../schemas';
 import {
   countCrossings,
   layoutAlphabetic,
@@ -28,28 +29,54 @@ type PinnedNode = { kind: 'grapheme' | 'phoneme'; symbol: string } | null;
 
 interface Props {
   iso: string;
+  inventory: Inventory;
+  langKey: string;
+  onSelectGrapheme: (g: string) => void;
+  onSelectPhoneme: (p: string) => void;
 }
 
 const MAX_EDGES = 200;
+const DEFAULT_MIN_COUNT = 2;
 
-export function MappingGraph({ iso }: Props) {
+export function MappingGraph({
+  iso,
+  inventory,
+  onSelectGrapheme,
+  onSelectPhoneme,
+}: Props) {
   const { data: gp, isLoading } = useGraphemePhoneme(iso);
-  const navigate = useNavigate();
   const { play } = useAudio();
   const [layoutId, setLayoutId] = useState<LayoutId>('barycenter');
-  // Per-driver sort direction — remembered across layout switches, so
-  // toggling "Graphemes" away and back preserves its chosen arrow.
   const [grapDir, setGrapDir] = useState<SortDirection>('desc');
   const [phonDir, setPhonDir] = useState<SortDirection>('desc');
   const [pinned, setPinned] = useState<PinnedNode>(null);
+  // Hide edges with count ≤ minCount by default — those are almost always
+  // alignment noise (words where length coincidentally matched). Slider
+  // exposed so users can see the full picture if they want.
+  const [minCount, setMinCount] = useState<number>(DEFAULT_MIN_COUNT);
+
+  /** Normalized segment set from PHOIBLE — used to flag phoneme nodes that
+   *  appear in the mapping but aren't distinct in the inventory. */
+  const inventorySet = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of inventory.phonemes) {
+      s.add(p.segment);
+      s.add(normalize(p.segment));
+    }
+    return s;
+  }, [inventory]);
 
   const edges: Edge[] = useMemo(() => {
     if (!gp) return [];
     return [...gp.mappings]
+      .filter((m) => m.count >= minCount)
       .sort((a, b) => b.count - a.count)
       .slice(0, MAX_EDGES)
       .map((m) => ({ a: m.grapheme, b: m.phoneme, w: m.count }));
-  }, [gp]);
+  }, [gp, minCount]);
+
+  const totalMappings = gp?.mappings.length ?? 0;
+  const filteredOut = totalMappings - (gp?.mappings.filter((m) => m.count >= minCount).length ?? 0);
 
   const bipartiteLayout = useMemo(() => {
     if (edges.length === 0) return { layerA: [], layerB: [] };
@@ -150,26 +177,29 @@ export function MappingGraph({ iso }: Props) {
     );
   }
 
-  const selectPhoneme = (p: string) =>
-    navigate(`/lang/${iso}/phoneme/${encodeURIComponent(p)}`);
-
-  const handlePin = (kind: 'grapheme' | 'phoneme', symbol: string) => {
-    setPinned((cur) =>
-      cur && cur.kind === kind && cur.symbol === symbol
-        ? null
-        : { kind, symbol }
-    );
+  const handleNodeClick = (kind: 'grapheme' | 'phoneme', symbol: string) => {
+    // Pin the node for visual focus + word chain, then open detail panel.
+    setPinned({ kind, symbol });
+    if (kind === 'phoneme') onSelectPhoneme(symbol);
+    else onSelectGrapheme(symbol);
   };
 
   return (
     <div>
+      <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200">
+        <strong>About this data:</strong> alignments come from a v1
+        greedy aligner that zips word chars with IPA segments 1-to-1 when
+        lengths match. Rare edges (count ≤ 2) are often noise from words
+        where the length coincidentally matched — they're hidden by default;
+        use the slider below to include them.
+      </div>
+
       <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
         <LayoutPicker
           value={layoutId}
           grapDir={grapDir}
           phonDir={phonDir}
           onPick={(id) => {
-            // Clicking a degree button while already active flips its arrow.
             if (id === 'degree-grapheme' && layoutId === 'degree-grapheme') {
               setGrapDir(grapDir === 'desc' ? 'asc' : 'desc');
               return;
@@ -181,11 +211,29 @@ export function MappingGraph({ iso }: Props) {
             setLayoutId(id);
           }}
         />
+        <label className="flex items-center gap-2 text-xs text-neutral-500">
+          Min count:
+          <input
+            type="range"
+            min={1}
+            max={10}
+            value={minCount}
+            onChange={(e) => setMinCount(Number(e.target.value))}
+            className="w-24"
+          />
+          <span className="tabular-nums">{minCount}</span>
+        </label>
         <div className="flex flex-1 flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500">
           <span>
             Top {edges.length} edges · {bipartiteLayout.layerA.length} graphemes ·{' '}
             {bipartiteLayout.layerB.length} phonemes
           </span>
+          {filteredOut > 0 && (
+            <span>
+              ({filteredOut.toLocaleString()} rare edge
+              {filteredOut === 1 ? '' : 's'} hidden)
+            </span>
+          )}
           {crossings !== null && (
             <span className="tabular-nums">
               {crossings.toLocaleString()} crossings
@@ -215,7 +263,7 @@ export function MappingGraph({ iso }: Props) {
               </div>
             }
           >
-            <ForceLayout edges={edges} onSelectPhoneme={selectPhoneme} />
+            <ForceLayout edges={edges} onSelectPhoneme={onSelectPhoneme} />
           </Suspense>
         ) : (
           <div className="p-4">
@@ -224,9 +272,9 @@ export function MappingGraph({ iso }: Props) {
               layout={bipartiteLayout}
               edgeExamples={gp.edgeExamples ?? {}}
               pinned={pinned}
-              onPinNode={handlePin}
-              onSelectPhoneme={selectPhoneme}
+              onPinNode={handleNodeClick}
               onPlayPhoneme={play}
+              inventorySet={inventorySet}
             />
           </div>
         )}

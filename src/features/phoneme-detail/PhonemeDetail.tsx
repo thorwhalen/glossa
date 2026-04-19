@@ -17,6 +17,7 @@ import { useGraphemePhoneme, usePhonemeIndex } from '../../hooks/useData';
 import { hasAudio } from '../../lib/ipa/audio';
 import { useSymbolStatus } from '../../store/audio';
 import { groupedFeatures } from '../../lib/features';
+import { normalize } from '../../lib/ipa/normalize';
 
 interface Props {
   inventory: Inventory;
@@ -25,9 +26,38 @@ interface Props {
 }
 
 export function PhonemeDetail({ inventory, symbol, onClose }: Props) {
-  const phoneme = symbol
-    ? inventory.phonemes.find((p) => p.segment === symbol)
-    : null;
+  // Resolve the phoneme in the PHOIBLE inventory.
+  //
+  // 1. Exact match (common case).
+  // 2. Normalized match — strip length markers and combining diacritics,
+  //    so WikiPron's broad `a` matches PHOIBLE's `a̟` (advanced-a).
+  // 3. Fallback: we render the panel anyway with whatever we can gather
+  //    from WikiPron + the phoneme index; the panel signals that the
+  //    symbol isn't a distinct inventory entry in this language.
+  const resolved = useMemo(() => {
+    if (!symbol) return { phoneme: null, matchKind: 'none' as const };
+    const exact = inventory.phonemes.find((p) => p.segment === symbol);
+    if (exact) return { phoneme: exact, matchKind: 'exact' as const };
+    const norm = normalize(symbol);
+    const normalized = inventory.phonemes.find(
+      (p) => normalize(p.segment) === norm
+    );
+    if (normalized)
+      return { phoneme: normalized, matchKind: 'normalized' as const };
+    return { phoneme: null, matchKind: 'synthetic' as const };
+  }, [inventory, symbol]);
+
+  const displayPhoneme: Phoneme | null =
+    resolved.phoneme ??
+    (symbol
+      ? {
+          segment: symbol,
+          marginal: false,
+          allophones: [],
+          features: {},
+          segmentClass: 'other',
+        }
+      : null);
 
   useEffect(() => {
     if (!symbol) return;
@@ -40,7 +70,7 @@ export function PhonemeDetail({ inventory, symbol, onClose }: Props) {
 
   return (
     <AnimatePresence>
-      {symbol && phoneme && (
+      {symbol && displayPhoneme && (
         <>
           <motion.div
             key="backdrop"
@@ -65,7 +95,8 @@ export function PhonemeDetail({ inventory, symbol, onClose }: Props) {
           >
             <DetailBody
               inventory={inventory}
-              phoneme={phoneme}
+              phoneme={displayPhoneme}
+              matchKind={resolved.matchKind}
               onClose={onClose}
             />
           </motion.aside>
@@ -168,10 +199,12 @@ function CopyButton({ text }: { text: string }) {
 function DetailBody({
   inventory,
   phoneme,
+  matchKind,
   onClose,
 }: {
   inventory: Inventory;
   phoneme: Phoneme;
+  matchKind: 'exact' | 'normalized' | 'synthetic' | 'none';
   onClose: () => void;
 }) {
   const { play } = useAudio();
@@ -206,6 +239,8 @@ function DetailBody({
           <p className="text-xs uppercase tracking-wide text-neutral-500">
             {phoneme.segmentClass}
             {phoneme.marginal && ' · marginal'}
+            {matchKind === 'normalized' && ' · normalized match'}
+            {matchKind === 'synthetic' && ' · not in inventory'}
           </p>
           <p className="mt-1 text-xs text-neutral-500">in {inventory.name}</p>
         </div>
@@ -218,6 +253,25 @@ function DetailBody({
           <X size={18} />
         </button>
       </header>
+
+      {matchKind === 'synthetic' && (
+        <section className="border-b border-neutral-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-neutral-800 dark:bg-amber-900/20 dark:text-amber-200">
+          <p>
+            <strong>Heads-up:</strong> <span className="ipa">{phoneme.segment}</span>{' '}
+            is a broad-phonemic target from WikiPron but isn't a distinct
+            entry in {inventory.name}'s PHOIBLE inventory. The real inventory
+            segment may carry a diacritic (e.g. length, advanced, nasalized).
+            Features below are therefore empty.
+          </p>
+        </section>
+      )}
+
+      {matchKind === 'normalized' && (
+        <section className="border-b border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">
+          Showing {inventory.name}'s closest inventory segment — the
+          WikiPron label normalizes to this one after stripping diacritics.
+        </section>
+      )}
 
       <section className="flex flex-col items-center gap-4 border-b border-neutral-200 px-4 py-8 dark:border-neutral-800">
         <span

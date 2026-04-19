@@ -9,13 +9,17 @@ interface Props {
   layout: BipartiteLayout;
   /** edgeKey "{g}|{p}" → example words (longest first). */
   edgeExamples: Record<string, string[]>;
-  onSelectPhoneme: (p: string) => void;
-  /** Called when a node is clicked so the parent can offer follow-up actions. */
+  /** Called when a node is clicked — parent opens the appropriate detail panel. */
   onPinNode?: (kind: 'grapheme' | 'phoneme', symbol: string) => void;
   /** Which node, if any, is currently pinned (sticky highlight). */
   pinned?: { kind: 'grapheme' | 'phoneme'; symbol: string } | null;
   /** Fires when the speaker icon next to a phoneme label is clicked. */
   onPlayPhoneme: (phoneme: string) => void;
+  /** Set of phoneme symbols that ARE in the PHOIBLE inventory (exact or normalized).
+   *  Phonemes in the mapping but not in this set get a small "?" marker so
+   *  the user knows the WikiPron label doesn't correspond to a distinct
+   *  inventory entry. */
+  inventorySet: Set<string>;
 }
 
 const NODE_RADIUS = 11;
@@ -41,10 +45,10 @@ export function BipartiteGraph({
   edges,
   layout,
   edgeExamples,
-  onSelectPhoneme,
   onPinNode,
   pinned,
   onPlayPhoneme,
+  inventorySet,
 }: Props) {
   const [hovered, setHovered] = useState<string | null>(null);
 
@@ -228,12 +232,7 @@ export function BipartiteGraph({
               onMouseLeave={() => setHovered(null)}
               onClick={(e) => {
                 e.stopPropagation();
-                if (e.detail === 2) {
-                  // double-click opens detail
-                  onSelectPhoneme(p);
-                } else {
-                  onPinNode?.('phoneme', p);
-                }
+                onPinNode?.('phoneme', p);
               }}
               style={{ cursor: 'pointer' }}
             >
@@ -249,6 +248,7 @@ export function BipartiteGraph({
                       : 'fill-accent/5 stroke-accent/40'
                 }
                 strokeWidth={isPinned ? 2 : 1}
+                strokeDasharray={!inventorySet.has(p) ? '2 2' : undefined}
               />
               <text
                 x={COL_RIGHT + LABEL_OFFSET}
@@ -261,6 +261,14 @@ export function BipartiteGraph({
                 }
               >
                 {p}
+                {!inventorySet.has(p) && (
+                  <tspan
+                    dx={4}
+                    className="fill-amber-600 text-[10px]"
+                  >
+                    ?
+                  </tspan>
+                )}
               </text>
               {hasAudio(p) && (
                 <SpeakerIcon

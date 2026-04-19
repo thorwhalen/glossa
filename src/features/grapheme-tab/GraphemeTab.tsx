@@ -1,28 +1,32 @@
 import { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useGraphemePhoneme } from '../../hooks/useData';
 
 interface Props {
   iso: string;
+  /** Called when the user clicks a grapheme row. Parent opens GraphemeDetail. */
+  onSelectGrapheme: (grapheme: string) => void;
+  /** Called when the user clicks a phoneme pill. Parent opens PhonemeDetail. */
+  onSelectPhoneme: (phoneme: string) => void;
 }
 
 /**
- * Grapheme list for the current language. Each grapheme shows the phoneme(s)
- * it maps to, sorted by observed frequency.
- *
- * Data comes from WikiPron alignment (grapheme-phoneme/{iso}.json). If the
- * language has no lexicon yet, we show a friendly placeholder.
+ * Grapheme list for the current language. Each row is a grapheme with its
+ * phoneme targets shown as pills; clicking the grapheme opens a grapheme
+ * detail panel, clicking a pill opens the phoneme detail panel. Same
+ * click semantics as the Mapping tab so they feel consistent.
  */
-export function GraphemeTab({ iso }: Props) {
+export function GraphemeTab({ iso, onSelectGrapheme, onSelectPhoneme }: Props) {
   const { data: gp, isLoading } = useGraphemePhoneme(iso);
-  const navigate = useNavigate();
 
-  // Aggregate per-grapheme: collect all phoneme targets + total count.
   const graphemes = useMemo(() => {
     if (!gp) return [];
     const byG = new Map<
       string,
-      { grapheme: string; total: number; targets: Array<{ phoneme: string; count: number }> }
+      {
+        grapheme: string;
+        total: number;
+        targets: Array<{ phoneme: string; count: number }>;
+      }
     >();
     for (const m of gp.mappings) {
       const entry = byG.get(m.grapheme) ?? {
@@ -80,7 +84,8 @@ export function GraphemeTab({ iso }: Props) {
       <p className="mb-3 text-xs text-neutral-500">
         {graphemes.length.toLocaleString()} graphemes observed in{' '}
         {gp.mappings.reduce((a, m) => a + m.count, 0).toLocaleString()}{' '}
-        alignments. Click a phoneme to see its details.
+        alignments. Click a grapheme for its detail panel, or a phoneme pill
+        for the phoneme's details.
       </p>
       <ul className="divide-y divide-neutral-200 overflow-hidden rounded-md border border-neutral-200 dark:divide-neutral-800 dark:border-neutral-800">
         {graphemes.map((g) => (
@@ -88,9 +93,14 @@ export function GraphemeTab({ iso }: Props) {
             key={g.grapheme}
             className="flex items-center gap-4 bg-white px-4 py-3 dark:bg-neutral-900"
           >
-            <span className="inline-flex min-w-[2.5rem] justify-center rounded border border-neutral-200 bg-white px-2 py-1 font-mono text-lg dark:border-neutral-800 dark:bg-neutral-950">
+            <button
+              type="button"
+              onClick={() => onSelectGrapheme(g.grapheme)}
+              className="inline-flex min-w-[2.5rem] items-center justify-center rounded border border-neutral-200 bg-white px-2 py-1 font-mono text-lg transition hover:border-accent hover:shadow-sm dark:border-neutral-800 dark:bg-neutral-950"
+              title="open grapheme detail"
+            >
               {g.grapheme}
-            </span>
+            </button>
             <div className="flex flex-1 flex-wrap gap-1.5">
               {g.targets.slice(0, 6).map((t) => {
                 const share = t.count / g.total;
@@ -98,15 +108,11 @@ export function GraphemeTab({ iso }: Props) {
                   <button
                     key={t.phoneme}
                     type="button"
-                    onClick={() =>
-                      navigate(
-                        `/lang/${iso}/phoneme/${encodeURIComponent(t.phoneme)}`
-                      )
-                    }
+                    onClick={() => onSelectPhoneme(t.phoneme)}
                     className="ipa inline-flex items-center gap-1.5 rounded border border-neutral-200 bg-white px-2 py-1 text-sm transition hover:border-accent hover:shadow-sm dark:border-neutral-800 dark:bg-neutral-950"
                     title={`${t.count.toLocaleString()} observations (${Math.round(
                       share * 100
-                    )}%)`}
+                    )}%)${t.count <= 2 ? ' — rare, likely alignment noise' : ''}`}
                   >
                     {t.phoneme}
                     <span className="text-[10px] text-neutral-500 tabular-nums">

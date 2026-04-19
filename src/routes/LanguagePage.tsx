@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   useGraphemePhoneme,
   useInventory,
@@ -12,6 +12,7 @@ import { IpaConsonantChart } from '../features/chart/IpaConsonantChart';
 import { IpaVowelChart } from '../features/chart/IpaVowelChart';
 import { Suprasegmentals } from '../features/chart/Suprasegmentals';
 import { PhonemeDetail } from '../features/phoneme-detail/PhonemeDetail';
+import { GraphemeDetail } from '../features/grapheme-detail/GraphemeDetail';
 import { GraphemeTab } from '../features/grapheme-tab/GraphemeTab';
 import { FunFacts } from '../features/fun-facts/FunFacts';
 import { Tabs } from '../components/Tabs';
@@ -35,10 +36,21 @@ export function LanguagePage() {
   // specific non-primary variant. We preserve the `iso` name for URL
   // back-compat.
   const { iso: key, symbol } = useParams<{ iso: string; symbol?: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const { data, isLoading, error } = useInventory(key);
   const { play } = useAudio();
   const [tab, setTab] = useState<TabId>('chart');
+
+  // Distinguish /lang/:key/phoneme/:s from /lang/:key/grapheme/:s by URL
+  // shape (React Router v6 doesn't give us a neat kind-discriminator).
+  const detailKind: 'phoneme' | 'grapheme' | null = location.pathname.includes(
+    '/grapheme/'
+  )
+    ? 'grapheme'
+    : location.pathname.includes('/phoneme/')
+      ? 'phoneme'
+      : null;
 
   // Lexicon / grapheme-phoneme data is keyed by ISO (not inventory) because
   // WikiPron aggregates across variants. We read the ISO off the loaded
@@ -90,6 +102,10 @@ export function LanguagePage() {
     if (!key) return;
     play(seg);
     navigate(`/lang/${key}/phoneme/${encodeURIComponent(seg)}`);
+  };
+  const selectGrapheme = (g: string) => {
+    if (!key) return;
+    navigate(`/lang/${key}/grapheme/${encodeURIComponent(g)}`);
   };
   const closePanel = () => {
     if (!key) return;
@@ -185,18 +201,36 @@ export function LanguagePage() {
               />
             </>
           )}
-          {tab === 'graphemes' && <GraphemeTab iso={actualIso} />}
+          {tab === 'graphemes' && (
+            <GraphemeTab
+              iso={actualIso}
+              onSelectGrapheme={selectGrapheme}
+              onSelectPhoneme={selectPhoneme}
+            />
+          )}
           {tab === 'mapping' && (
             <Suspense
               fallback={<p className="text-neutral-500">Loading graph…</p>}
             >
-              <MappingGraph iso={actualIso} />
+              <MappingGraph
+                iso={actualIso}
+                inventory={data}
+                langKey={key}
+                onSelectGrapheme={selectGrapheme}
+                onSelectPhoneme={selectPhoneme}
+              />
             </Suspense>
           )}
 
           <PhonemeDetail
             inventory={data}
-            symbol={decodedSymbol}
+            symbol={detailKind === 'phoneme' ? decodedSymbol : null}
+            onClose={closePanel}
+          />
+          <GraphemeDetail
+            inventory={data}
+            grapheme={detailKind === 'grapheme' ? decodedSymbol : null}
+            langKey={key}
             onClose={closePanel}
           />
         </>
