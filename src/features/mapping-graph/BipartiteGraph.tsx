@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { BipartiteLayout, Edge } from '../../lib/graph/bipartite';
 import { hasAudio } from '../../lib/ipa/audio';
+import { useSymbolStatus } from '../../store/audio';
 
 interface Props {
   edges: Edge[];
@@ -265,6 +266,7 @@ export function BipartiteGraph({
                 <SpeakerIcon
                   cx={COL_RIGHT + LABEL_OFFSET + 30}
                   cy={0}
+                  symbol={p}
                   onPlay={() => onPlayPhoneme(p)}
                 />
               )}
@@ -287,22 +289,43 @@ function indexPositions(arr: string[]): Map<string, number> {
 }
 
 /**
- * Small inline speaker icon for phoneme rows that have a Commons recording.
- * Rendered directly in SVG (rather than via <foreignObject> + lucide) so it
- * plays well with the framer-motion-animated parent group.
+ * Small inline speaker icon for phoneme rows with a Commons recording.
+ * Rendered directly in SVG so it sits inside the same framer-motion group
+ * as its parent node.
+ *
+ * Reflects per-symbol audio state so the user sees WHY a click did or
+ * didn't produce sound:
+ *   idle    — neutral outline
+ *   loading — pulsing outline ring (network in flight)
+ *   playing — filled accent color
+ *   error   — red tint
+ *   missing — we shouldn't reach this branch; hasAudio() gates rendering
  */
 function SpeakerIcon({
   cx,
   cy,
+  symbol,
   onPlay,
 }: {
   cx: number;
   cy: number;
+  symbol: string;
   onPlay: () => void;
 }) {
   const [hover, setHover] = useState(false);
-  const stroke = hover ? '#0d7377' : 'currentColor';
-  const opacity = hover ? 1 : 0.5;
+  const { status } = useSymbolStatus(symbol);
+
+  const isPlaying = status === 'playing';
+  const isLoading = status === 'loading';
+  const isError = status === 'error';
+
+  const color = isError
+    ? '#dc2626'
+    : isPlaying || hover
+      ? '#0d7377'
+      : 'currentColor';
+  const opacity = isPlaying || isLoading || isError || hover ? 1 : 0.5;
+
   return (
     <g
       transform={`translate(${cx}, ${cy})`}
@@ -314,21 +337,33 @@ function SpeakerIcon({
       onMouseLeave={() => setHover(false)}
       style={{ cursor: 'pointer' }}
       role="button"
-      aria-label="play phoneme"
+      aria-label={`play phoneme ${symbol}`}
     >
-      {/* invisible hit target — makes the icon easier to tap on mobile */}
       <rect x={-8} y={-8} width={20} height={16} fill="transparent" />
-      {/* speaker body + cone */}
+
+      {isLoading && (
+        <motion.circle
+          cx={-1}
+          cy={0}
+          r={9}
+          fill="none"
+          stroke="#0d7377"
+          strokeWidth={1}
+          initial={{ opacity: 0.6, scale: 0.8 }}
+          animate={{ opacity: [0.6, 0.1, 0.6], scale: [0.8, 1.15, 0.8] }}
+          transition={{ duration: 1.1, repeat: Infinity }}
+        />
+      )}
+
       <path
         d="M-5 -2 L-2 -2 L1 -4 L1 4 L-2 2 L-5 2 Z"
-        fill={stroke}
+        fill={isPlaying ? color : color}
         opacity={opacity}
       />
-      {/* sound waves */}
       <path
         d="M3 -2 Q5 0 3 2"
         fill="none"
-        stroke={stroke}
+        stroke={color}
         strokeWidth={1}
         strokeLinecap="round"
         opacity={opacity}
@@ -336,7 +371,7 @@ function SpeakerIcon({
       <path
         d="M5 -4 Q8 0 5 4"
         fill="none"
-        stroke={stroke}
+        stroke={color}
         strokeWidth={1}
         strokeLinecap="round"
         opacity={opacity * 0.6}

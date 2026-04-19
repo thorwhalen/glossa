@@ -1,10 +1,21 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
-import { X, Volume2, Globe, BookOpen, Copy, Check } from 'lucide-react';
+import {
+  X,
+  Volume2,
+  VolumeX,
+  Loader2,
+  AlertCircle,
+  Globe,
+  BookOpen,
+  Copy,
+  Check,
+} from 'lucide-react';
 import type { Inventory, Phoneme } from '../../schemas';
 import { useAudio } from '../../hooks/useAudio';
 import { useGraphemePhoneme, usePhonemeIndex } from '../../hooks/useData';
 import { hasAudio } from '../../lib/ipa/audio';
+import { useSymbolStatus } from '../../store/audio';
 import { groupedFeatures } from '../../lib/features';
 
 interface Props {
@@ -61,6 +72,72 @@ export function PhonemeDetail({ inventory, symbol, onClose }: Props) {
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+function PlayButton({
+  segment,
+  canPlay,
+  onPlay,
+}: {
+  segment: string;
+  canPlay: boolean;
+  onPlay: () => void;
+}) {
+  const { status, errorMessage } = useSymbolStatus(segment);
+
+  // Layer in per-state affordances on top of the existing accent pill.
+  const isLoading = status === 'loading';
+  const isError = status === 'error';
+  const isPlaying = status === 'playing';
+
+  const label = !canPlay
+    ? 'No recording'
+    : isLoading
+      ? 'Loading…'
+      : isError
+        ? 'Retry'
+        : isPlaying
+          ? 'Playing'
+          : 'Play';
+
+  const Icon = !canPlay
+    ? VolumeX
+    : isLoading
+      ? Loader2
+      : isError
+        ? AlertCircle
+        : Volume2;
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <button
+        type="button"
+        onClick={onPlay}
+        disabled={!canPlay}
+        className={[
+          'inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium shadow-sm transition',
+          isError
+            ? 'bg-red-600 text-white hover:bg-red-500'
+            : 'bg-accent text-white hover:bg-accent-muted',
+          'disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-600 disabled:opacity-60 dark:disabled:bg-neutral-700 dark:disabled:text-neutral-400',
+        ].join(' ')}
+        aria-label={`play phoneme ${segment}`}
+      >
+        <Icon size={16} className={isLoading ? 'animate-spin' : ''} />
+        {label}
+      </button>
+      {!canPlay && (
+        <p className="text-[11px] text-neutral-500">
+          Not in our Commons audio set
+        </p>
+      )}
+      {isError && errorMessage && (
+        <p className="max-w-[220px] text-center text-[11px] text-red-600">
+          {errorMessage}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -150,15 +227,11 @@ function DetailBody({
           {phoneme.segment}
         </span>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => play(phoneme.segment)}
-            disabled={!canPlay}
-            className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-accent-muted disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Volume2 size={16} />
-            {canPlay ? 'Play' : 'No recording'}
-          </button>
+          <PlayButton
+            segment={phoneme.segment}
+            canPlay={canPlay}
+            onPlay={() => play(phoneme.segment)}
+          />
           <CopyButton text={phoneme.segment} />
         </div>
       </section>

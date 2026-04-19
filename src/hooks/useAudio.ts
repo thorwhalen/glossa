@@ -1,27 +1,11 @@
-import { useCallback, useRef } from 'react';
-import { audioUrlFor } from '../lib/ipa/audio';
+import { useAudioStore } from '../store/audio';
 
 /**
- * Minimal IPA audio hook. Clicks on a phoneme tile fire `play(symbol)`.
- * v1 is single-channel: a new play interrupts the previous one.
+ * Thin facade kept for backward compatibility — all the real state lives in
+ * the audio store so every component gets synchronized loading/playing/
+ * error/missing feedback for free.
  */
 export function useAudio() {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  const play = useCallback((symbol: string) => {
-    const url = audioUrlFor(symbol);
-    if (!url) return;
-
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = '';
-    }
-    const audio = new Audio(url);
-    audio.play().catch((err) => {
-      console.warn(`[audio] failed for ${symbol}:`, err);
-    });
-    audioRef.current = audio;
-  }, []);
-
+  const play = useAudioStore((s) => s.play);
   return { play };
 }

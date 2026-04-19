@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { Moon, Sun } from 'lucide-react';
+import { AudioStatusToast } from './AudioStatusToast';
 
 const THEME_KEY = 'phogra-theme';
 
@@ -33,6 +34,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
       </button>
+      <AudioStatusToast />
       {children}
     </>
   );
