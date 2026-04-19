@@ -4,7 +4,8 @@ import { useAudio } from '../hooks/useAudio';
 import { IpaConsonantChart } from '../features/chart/IpaConsonantChart';
 import { IpaVowelChart } from '../features/chart/IpaVowelChart';
 
-// Suggested languages for the landing page.
+// Suggested languages for the landing page. Keep in sync with
+// data-prep/phogra_data_prep/sources/wikipron.py SUGGESTED_ISOS.
 const SUGGESTED = [
   'eng',
   'fra',
@@ -21,6 +22,7 @@ const SUGGESTED = [
   'nld',
   'tur',
   'pol',
+  'swe',
 ];
 
 export function Home() {

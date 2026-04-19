@@ -27,7 +27,7 @@ from typing import Any
 import requests
 from tqdm import tqdm
 
-# The 15 ISO 639-3 codes we pull for v1 — must stay in sync with
+# ISO 639-3 codes we pull WikiPron lexicons for — must stay in sync with
 # src/routes/Home.tsx SUGGESTED.
 SUGGESTED_ISOS = [
     "eng",
@@ -45,6 +45,7 @@ SUGGESTED_ISOS = [
     "nld",
     "tur",
     "pol",
+    "swe",
 ]
 
 # WikiPron labels its IPA variants narrow (phonetic) vs broad (phonemic).
