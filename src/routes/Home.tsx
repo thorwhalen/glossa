@@ -16,7 +16,9 @@ const SUGGESTED = [
   'deu',
   'ita',
   'jpn',
-  'kor',
+  // 'kor' omitted — WikiPron's Hangul alignment produces ~1 usable pair;
+  // Mapping & Graphemes tabs would show the empty-state placeholder. Still
+  // reachable via search if someone wants the phoneme inventory.
   'cmn',
   'arb',
   'rus',
