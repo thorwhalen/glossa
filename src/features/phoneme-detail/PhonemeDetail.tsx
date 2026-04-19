@@ -14,7 +14,7 @@ import {
 import type { Inventory, Phoneme } from '../../schemas';
 import { useAudio } from '../../hooks/useAudio';
 import { useGraphemePhoneme, usePhonemeIndex } from '../../hooks/useData';
-import { hasAudio } from '../../lib/ipa/audio';
+import { hasAudio, isAudioApproximated } from '../../lib/ipa/audio';
 import { useSymbolStatus } from '../../store/audio';
 import { groupedFeatures } from '../../lib/features';
 import { normalize } from '../../lib/ipa/normalize';
@@ -117,10 +117,10 @@ function PlayButton({
 }) {
   const { status, errorMessage } = useSymbolStatus(segment);
 
-  // Layer in per-state affordances on top of the existing accent pill.
   const isLoading = status === 'loading';
   const isError = status === 'error';
   const isPlaying = status === 'playing';
+  const approximated = canPlay && isAudioApproximated(segment);
 
   const label = !canPlay
     ? 'No recording'
@@ -130,7 +130,9 @@ function PlayButton({
         ? 'Retry'
         : isPlaying
           ? 'Playing'
-          : 'Play';
+          : approximated
+            ? 'Play (base)'
+            : 'Play';
 
   const Icon = !canPlay
     ? VolumeX
@@ -158,6 +160,13 @@ function PlayButton({
         <Icon size={16} className={isLoading ? 'animate-spin' : ''} />
         {label}
       </button>
+      {approximated && (
+        <p className="max-w-[260px] text-center text-[11px] text-neutral-500">
+          No exact recording. Plays the base IPA segment{' '}
+          <span className="ipa font-medium">{normalize(segment)}</span> from
+          Commons.
+        </p>
+      )}
       {!canPlay && (
         <p className="text-[11px] text-neutral-500">
           Not in our Commons audio set

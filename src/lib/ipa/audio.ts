@@ -129,12 +129,34 @@ const IPA_TO_FILE: Record<string, string> = {
   ɒ: 'Open_back_rounded_vowel',
 };
 
+import { normalize } from './normalize';
+
+/**
+ * Resolve a symbol to a Commons audio URL.
+ *
+ * We first look up the exact symbol (e.g. `a`). When PHOIBLE gives us a
+ * diacritically-modified variant (e.g. `a̟`, `ʉ̟`, `kʰ`) and Commons has
+ * no per-variant recording, we fall back to the normalized base symbol —
+ * plain `a`, `ʉ`, `k`. The spec calls this "approximated" audio; it's an
+ * accurate rendering of the canonical IPA segment, not the narrow
+ * language-specific variant.
+ */
 export function audioUrlFor(symbol: string): string | null {
-  const stem = IPA_TO_FILE[symbol];
+  const stem = IPA_TO_FILE[symbol] ?? IPA_TO_FILE[normalize(symbol)];
   if (!stem) return null;
   return `${COMMONS_BASE}${encodeURIComponent(stem)}.ogg`;
 }
 
 export function hasAudio(symbol: string): boolean {
-  return symbol in IPA_TO_FILE;
+  return symbol in IPA_TO_FILE || normalize(symbol) in IPA_TO_FILE;
+}
+
+/**
+ * True when we don't have an exact recording for `symbol` but we do have
+ * one for its normalized base (so hasAudio returns true and the user hears
+ * the base segment). Callers can surface this to mark playback as
+ * "approximated".
+ */
+export function isAudioApproximated(symbol: string): boolean {
+  return !(symbol in IPA_TO_FILE) && normalize(symbol) in IPA_TO_FILE;
 }
