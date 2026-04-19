@@ -245,27 +245,49 @@ def parse(raw_path: Path) -> dict[str, list[dict[str, Any]]]:
 
 
 def _build_alignment(
-    iso: str, entries: list[dict[str, Any]]
+    iso: str,
+    entries: list[dict[str, Any]],
+    out_dir: Path,
 ) -> dict[str, Any]:
     """1-to-1 grapheme↔phoneme counts + examples.
 
-    Emits three parallel example indices so the UI can hover a grapheme,
-    hover a phoneme, or hover an edge and always show a concrete word:
-
-    - examples[phoneme]               — N shortest words using the phoneme
-    - edgeExamples["{g}|{p}"]         — N shortest words that produced the
-                                        (g, p) alignment pair specifically
-    - mappings[i].examples            — same list mirrored onto the mapping
-                                        row for convenience
+    Reconciliation pass (new): WikiPron phoneme symbols are canonicalized
+    to the PHOIBLE inventory's segments where possible (see reconcile.py),
+    so Mapping graph edges point at segments that actually show up on the
+    IPA chart. Prosodic markers (stress, liaison) are dropped before
+    alignment.
     """
+    from ..reconcile import build_canonicalizer, load_inventory_segments, strip_prosody
+
+    inv_segments = load_inventory_segments(out_dir, iso)
+    canonicalize = build_canonicalizer(inv_segments) if inv_segments else None
+    inv_exact = set(inv_segments) if inv_segments else set()
+
+    def canon(ph: str) -> tuple[str, bool]:
+        """Return (canonical_phoneme, in_inventory)."""
+        if canonicalize is None:
+            return ph, False
+        mapped = canonicalize(ph)
+        if mapped is not None:
+            return mapped, True
+        return ph, ph in inv_exact
+
     pair_counts: Counter[tuple[str, str]] = Counter()
     examples: dict[str, list[dict[str, Any]]] = defaultdict(list)
     phoneme_words: dict[str, list[dict[str, Any]]] = defaultdict(list)
     edge_words: dict[tuple[str, str], list[str]] = defaultdict(list)
+    orphan_phonemes: set[str] = set()
 
     for e in entries:
         word = e["word"]
-        segs = e["pronunciation"]
+        raw_segs = strip_prosody(e["pronunciation"])
+        segs = []
+        for s in raw_segs:
+            c, in_inv = canon(s)
+            if not in_inv and c == s:
+                orphan_phonemes.add(s)
+            segs.append(c)
+
         if len(word) == len(segs):
             for ch, ph in zip(word, segs):
                 pair_counts[(ch, ph)] += 1
@@ -298,6 +320,7 @@ def _build_alignment(
         "mappings": mappings,
         "examples": examples,
         "edgeExamples": edge_examples,
+        "orphanPhonemes": sorted(orphan_phonemes),
     }
 
 
@@ -328,8 +351,8 @@ def emit(parsed: dict[str, list[dict[str, Any]]], out: Path) -> None:
             encoding="utf-8",
         )
 
-        # --- grapheme→phoneme summary ---
-        gp_payload = _build_alignment(iso, entries)
+        # --- grapheme→phoneme summary (reconciled against PHOIBLE) ---
+        gp_payload = _build_alignment(iso, entries, out)
         (gp_dir / f"{iso}.json").write_text(
             json.dumps(gp_payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
