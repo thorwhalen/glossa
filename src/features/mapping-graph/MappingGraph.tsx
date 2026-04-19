@@ -1,78 +1,62 @@
-import { useMemo, useRef } from 'react';
-import ForceGraph2D from 'react-force-graph-2d';
-import type { ForceGraphMethods } from 'react-force-graph-2d';
+import { lazy, Suspense, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useGraphemePhoneme } from '../../hooks/useData';
+import {
+  countCrossings,
+  layoutAlphabetic,
+  layoutByBarycenter,
+  layoutByDegree,
+  type Edge,
+} from '../../lib/graph/bipartite';
+import { BipartiteGraph } from './BipartiteGraph';
+
+// react-force-graph-2d is ~190 kB — only pull it in when the user picks the
+// force layout.
+const ForceLayout = lazy(() =>
+  import('./ForceLayout').then((m) => ({ default: m.ForceLayout }))
+);
+
+type LayoutId = 'barycenter' | 'degree' | 'alphabetic' | 'force';
 
 interface Props {
   iso: string;
 }
 
-type NodeKind = 'grapheme' | 'phoneme';
-interface GNode {
-  id: string;
-  label: string;
-  kind: NodeKind;
-  weight: number;
-}
-interface GLink {
-  source: string;
-  target: string;
-  value: number;
-}
+const MAX_EDGES = 200;
 
 export function MappingGraph({ iso }: Props) {
   const { data: gp, isLoading } = useGraphemePhoneme(iso);
-  const graphRef = useRef<ForceGraphMethods<GNode, GLink> | undefined>(
-    undefined
-  );
+  const navigate = useNavigate();
+  const [layoutId, setLayoutId] = useState<LayoutId>('barycenter');
 
-  const graph = useMemo(() => {
-    if (!gp) return { nodes: [], links: [] };
-    // Cap to top mappings to keep the layout readable.
-    const topN = 200;
-    const top = [...gp.mappings]
+  const edges: Edge[] = useMemo(() => {
+    if (!gp) return [];
+    return [...gp.mappings]
       .sort((a, b) => b.count - a.count)
-      .slice(0, topN);
-
-    const nodeMap = new Map<string, GNode>();
-    for (const m of top) {
-      const gKey = `g:${m.grapheme}`;
-      const pKey = `p:${m.phoneme}`;
-      const gNode =
-        nodeMap.get(gKey) ??
-        ({
-          id: gKey,
-          label: m.grapheme,
-          kind: 'grapheme' as const,
-          weight: 0,
-        } satisfies GNode);
-      gNode.weight += m.count;
-      nodeMap.set(gKey, gNode);
-
-      const pNode =
-        nodeMap.get(pKey) ??
-        ({
-          id: pKey,
-          label: m.phoneme,
-          kind: 'phoneme' as const,
-          weight: 0,
-        } satisfies GNode);
-      pNode.weight += m.count;
-      nodeMap.set(pKey, pNode);
-    }
-
-    const nodes = [...nodeMap.values()];
-    const links: GLink[] = top.map((m) => ({
-      source: `g:${m.grapheme}`,
-      target: `p:${m.phoneme}`,
-      value: m.count,
-    }));
-    return { nodes, links };
+      .slice(0, MAX_EDGES)
+      .map((m) => ({ a: m.grapheme, b: m.phoneme, w: m.count }));
   }, [gp]);
 
-  if (isLoading) {
-    return <p className="text-neutral-500">Loading lexicon…</p>;
-  }
+  const bipartiteLayout = useMemo(() => {
+    if (edges.length === 0) return { layerA: [], layerB: [] };
+    switch (layoutId) {
+      case 'barycenter':
+        return layoutByBarycenter(edges);
+      case 'degree':
+        return layoutByDegree(edges);
+      case 'alphabetic':
+        return layoutAlphabetic(edges);
+      default:
+        return layoutByBarycenter(edges);
+    }
+  }, [edges, layoutId]);
+
+  const crossings = useMemo(() => {
+    if (layoutId === 'force' || edges.length === 0) return null;
+    return countCrossings(edges, bipartiteLayout);
+  }, [edges, bipartiteLayout, layoutId]);
+
+  if (isLoading) return <p className="text-neutral-500">Loading lexicon…</p>;
 
   if (!gp) {
     return (
@@ -88,50 +72,102 @@ export function MappingGraph({ iso }: Props) {
     );
   }
 
+  const selectPhoneme = (p: string) =>
+    navigate(`/lang/${iso}/phoneme/${encodeURIComponent(p)}`);
+
   return (
     <div>
-      <p className="mb-3 text-xs text-neutral-500">
-        Top 200 grapheme↔phoneme edges, weighted by observed frequency.
-        Graphemes are teal; phonemes are dark. Drag nodes to explore.
-      </p>
-      <div className="h-[600px] overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950">
-        <ForceGraph2D
-          ref={graphRef}
-          graphData={graph}
-          nodeLabel={(n) => `${n.label} (${n.weight.toLocaleString()})`}
-          nodeRelSize={4}
-          nodeCanvasObject={(node, ctx, globalScale) => {
-            const n = node as GNode & { x?: number; y?: number };
-            const fontSize = 14 / globalScale;
-            ctx.font = `${fontSize}px Inter, sans-serif`;
-            const label = n.label;
-            const isG = n.kind === 'grapheme';
-            ctx.fillStyle = isG ? '#0d7377' : '#1f2937';
-            ctx.beginPath();
-            ctx.arc(
-              n.x ?? 0,
-              n.y ?? 0,
-              Math.max(2, Math.sqrt(n.weight) / 4),
-              0,
-              2 * Math.PI
-            );
-            ctx.fill();
-            ctx.fillStyle = isG ? '#0d7377' : '#374151';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(
-              label,
-              n.x ?? 0,
-              (n.y ?? 0) + Math.max(6, Math.sqrt(n.weight) / 4) + fontSize
-            );
-          }}
-          linkWidth={(l) => Math.log((l as GLink).value + 1) / 2}
-          linkColor={() => 'rgba(128, 128, 128, 0.3)'}
-          backgroundColor="transparent"
-          cooldownTicks={100}
-          onEngineStop={() => graphRef.current?.zoomToFit(400, 40)}
-        />
+      <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
+        <LayoutPicker value={layoutId} onChange={setLayoutId} />
+        <div className="flex flex-1 flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500">
+          <span>
+            Top {edges.length} edges · {bipartiteLayout.layerA.length} graphemes ·{' '}
+            {bipartiteLayout.layerB.length} phonemes
+          </span>
+          {crossings !== null && (
+            <span className="tabular-nums">
+              {crossings.toLocaleString()} crossings
+            </span>
+          )}
+        </div>
       </div>
+
+      <div className="rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950">
+        {layoutId === 'force' ? (
+          <Suspense
+            fallback={
+              <div className="flex h-[600px] items-center justify-center text-neutral-500">
+                Loading force layout…
+              </div>
+            }
+          >
+            <ForceLayout edges={edges} onSelectPhoneme={selectPhoneme} />
+          </Suspense>
+        ) : (
+          <div className="p-4">
+            <BipartiteGraph
+              edges={edges}
+              layout={bipartiteLayout}
+              onSelectPhoneme={selectPhoneme}
+            />
+          </div>
+        )}
+      </div>
+
+      <p className="mt-3 text-xs text-neutral-500">
+        {LAYOUT_HINTS[layoutId]}
+      </p>
+    </div>
+  );
+}
+
+const LAYOUT_HINTS: Record<LayoutId, string> = {
+  barycenter:
+    'Barycenter heuristic (Sugiyama). Orders each side so the average edge goes straight-across — minimizes visual crossings.',
+  degree:
+    'Sort each side by total edge weight. Highly-connected hubs rise to the top; tails of rare mappings fall to the bottom.',
+  alphabetic:
+    'Deterministic but structure-blind. Useful as a reference baseline when comparing languages.',
+  force:
+    'Physics-based clusters. Connected nodes pull together; unrelated ones repel. Good for seeing communities; worse for reading specific edges.',
+};
+
+function LayoutPicker({
+  value,
+  onChange,
+}: {
+  value: LayoutId;
+  onChange: (v: LayoutId) => void;
+}) {
+  const options: Array<{ id: LayoutId; label: string }> = [
+    { id: 'barycenter', label: 'Min crossings' },
+    { id: 'degree', label: 'By degree' },
+    { id: 'alphabetic', label: 'Alphabetic' },
+    { id: 'force', label: 'Force' },
+  ];
+  return (
+    <div
+      role="tablist"
+      aria-label="graph layout"
+      className="inline-flex overflow-hidden rounded-md border border-neutral-300 dark:border-neutral-700"
+    >
+      {options.map((o) => (
+        <button
+          key={o.id}
+          role="tab"
+          aria-selected={value === o.id}
+          type="button"
+          onClick={() => onChange(o.id)}
+          className={[
+            'px-3 py-1.5 text-xs transition',
+            value === o.id
+              ? 'bg-accent text-white'
+              : 'bg-white text-neutral-600 hover:bg-neutral-50 dark:bg-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800',
+          ].join(' ')}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   );
 }
