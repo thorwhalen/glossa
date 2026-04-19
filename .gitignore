@@ -1,0 +1,23 @@
+node_modules
+dist
+dist-ssr
+*.local
+*.log
+.DS_Store
+
+# generated data bundles — all of public/data/ is regenerable from data-prep.
+# Keep a .gitkeep so the dir exists in checkouts for the initial `npm run dev`.
+public/data/*
+!public/data/.gitkeep
+
+# python data-prep
+data-prep/.venv
+data-prep/**/__pycache__
+data-prep/*.egg-info
+data-prep/uv.lock
+data-prep/cache/
+
+# editor
+.vscode/*
+!.vscode/extensions.json
+.idea

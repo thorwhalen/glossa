@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light dark;
+  }
+  body {
+    @apply bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100;
+    @apply font-sans antialiased;
+    margin: 0;
+  }
+  .ipa {
+    @apply font-ipa;
+    font-feature-settings: 'liga' 0, 'calt' 0;
+  }
+}
