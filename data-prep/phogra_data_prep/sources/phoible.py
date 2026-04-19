@@ -75,42 +75,72 @@ def parse(raw_path: Path) -> pd.DataFrame:
 
 
 def emit(df: pd.DataFrame, out: Path) -> None:
-    """Write languages.json + inventories/{iso}.json."""
+    """Write languages.json + inventories/{key}.json.
+
+    PHOIBLE often has multiple inventories per ISO 639-3 code (e.g. English
+    has 7 covering RP, American, NZ, Tyneside, etc.). We surface ALL of them
+    so the user can find "American English" by name. Keying:
+
+    - `key = iso`                 for the *primary* (largest) inventory of
+                                  that ISO. Keeps `/lang/eng` pointing at
+                                  the canonical variant.
+    - `key = "{iso}-{invId}"`     for all other inventories of that ISO.
+
+    Each inventory file is at `inventories/{key}.json`.
+    """
     out.mkdir(parents=True, exist_ok=True)
     inv_dir = out / "inventories"
     inv_dir.mkdir(exist_ok=True)
 
-    # Feature columns = everything not in the fixed metadata set
     feature_cols = [c for c in df.columns if c not in _NON_FEATURE_COLUMNS]
 
-    # --- Pick one inventory per ISO (largest by phoneme count) ---
-    # Group by ISO and find the InventoryID with the most rows.
+    # For each ISO, the InventoryID with the most rows is "primary".
     iso_counts = (
         df.groupby(["ISO6393", "InventoryID"])
         .size()
         .reset_index(name="n")
         .sort_values(["ISO6393", "n"], ascending=[True, False])
     )
-    chosen = iso_counts.drop_duplicates("ISO6393", keep="first")
-    chosen_ids = set(chosen["InventoryID"])
-    df_chosen = df[df["InventoryID"].isin(chosen_ids)].copy()
+    primary_inv_ids: set[int] = set(
+        iso_counts.drop_duplicates("ISO6393", keep="first")["InventoryID"]
+    )
 
-    # --- languages.json ---
+    def _key_for(iso: str, inv_id: int) -> str:
+        return iso if inv_id in primary_inv_ids else f"{iso}-{inv_id}"
+
+    def _display_name(lang_name: str, dialect: str | None) -> str:
+        if dialect and dialect.strip() and dialect.strip() != lang_name:
+            return f"{lang_name} — {dialect.strip()}"
+        return lang_name
+
+    # --- languages.json: one entry per (iso, inventoryId) ---
     languages: list[dict[str, Any]] = []
-    for (iso, inv_id), grp in df_chosen.groupby(["ISO6393", "InventoryID"]):
+    for (iso, inv_id), grp in df.groupby(["ISO6393", "InventoryID"]):
         if not isinstance(iso, str) or not iso:
             continue
         row0 = grp.iloc[0]
+        dialect = (
+            str(row0["SpecificDialect"]).strip()
+            if isinstance(row0["SpecificDialect"], str)
+            and row0["SpecificDialect"].strip()
+            else None
+        )
+        is_primary = inv_id in primary_inv_ids
         languages.append(
             {
+                "key": _key_for(iso, int(inv_id)),
                 "iso": iso,
+                "inventoryId": int(inv_id),
+                "isPrimary": bool(is_primary),
                 "glottocode": (
                     row0["Glottocode"]
                     if isinstance(row0["Glottocode"], str) and row0["Glottocode"]
                     else None
                 ),
                 "name": str(row0["LanguageName"]),
-                "family": None,  # enriched by glottolog source later
+                "dialect": dialect,
+                "displayName": _display_name(str(row0["LanguageName"]), dialect),
+                "family": None,
                 "macroarea": None,
                 "latitude": None,
                 "longitude": None,
@@ -118,7 +148,8 @@ def emit(df: pd.DataFrame, out: Path) -> None:
                 "sources": [f"PHOIBLE:{row0['Source']}"],
             }
         )
-    languages.sort(key=lambda r: r["name"].lower())
+    # Sort: primary first within each language name group, then alphabetical.
+    languages.sort(key=lambda r: (r["name"].lower(), not r["isPrimary"], r["key"]))
 
     (out / "languages.json").write_text(
         json.dumps(
@@ -132,43 +163,48 @@ def emit(df: pd.DataFrame, out: Path) -> None:
         ),
         encoding="utf-8",
     )
-    print(f"wrote languages.json  ({len(languages)} languages)")
+    print(f"wrote languages.json  ({len(languages)} inventories)")
 
     # --- phoneme-index.json (segment → [iso]) ---
-    phoneme_to_isos: dict[str, list[str]] = {}
-    for (iso, _inv_id), grp in df_chosen.groupby(["ISO6393", "InventoryID"]):
+    # Keyed by ISO (not inventory) — cross-linguistic rarity counts.
+    phoneme_to_isos: dict[str, set[str]] = {}
+    for (iso, _inv_id), grp in df.groupby(["ISO6393", "InventoryID"]):
         if not isinstance(iso, str) or not iso:
             continue
         for seg in set(grp["Phoneme"]):
-            phoneme_to_isos.setdefault(str(seg), []).append(iso)
-    # Sort lists for deterministic output
-    for k in phoneme_to_isos:
-        phoneme_to_isos[k] = sorted(phoneme_to_isos[k])
+            phoneme_to_isos.setdefault(str(seg), set()).add(iso)
+    phoneme_to_isos_list = {k: sorted(v) for k, v in phoneme_to_isos.items()}
     (out / "phoneme-index.json").write_text(
         json.dumps(
             {
                 "generatedAt": datetime.now(timezone.utc).isoformat(),
-                "distinctSegments": len(phoneme_to_isos),
-                "index": phoneme_to_isos,
+                "distinctSegments": len(phoneme_to_isos_list),
+                "index": phoneme_to_isos_list,
             },
             ensure_ascii=False,
         ),
         encoding="utf-8",
     )
     print(
-        f"wrote phoneme-index.json ({len(phoneme_to_isos)} distinct segments)"
+        f"wrote phoneme-index.json ({len(phoneme_to_isos_list)} distinct segments)"
     )
 
-    # --- inventories/{iso}.json ---
+    # --- inventories/{key}.json ---
     written = 0
     for (iso, inv_id), grp in tqdm(
-        df_chosen.groupby(["ISO6393", "InventoryID"]),
+        df.groupby(["ISO6393", "InventoryID"]),
         desc="inventories",
-        total=df_chosen[["ISO6393", "InventoryID"]].drop_duplicates().shape[0],
+        total=df[["ISO6393", "InventoryID"]].drop_duplicates().shape[0],
     ):
         if not isinstance(iso, str) or not iso:
             continue
         row0 = grp.iloc[0]
+        dialect = (
+            str(row0["SpecificDialect"]).strip()
+            if isinstance(row0["SpecificDialect"], str)
+            and row0["SpecificDialect"].strip()
+            else None
+        )
         phonemes: list[dict[str, Any]] = []
         for _, r in grp.iterrows():
             feats = {
@@ -190,6 +226,7 @@ def emit(df: pd.DataFrame, out: Path) -> None:
                 }
             )
         payload = {
+            "key": _key_for(iso, int(inv_id)),
             "iso": iso,
             "glottocode": (
                 row0["Glottocode"]
@@ -197,11 +234,14 @@ def emit(df: pd.DataFrame, out: Path) -> None:
                 else None
             ),
             "inventoryId": int(inv_id),
+            "isPrimary": bool(int(inv_id) in primary_inv_ids),
             "name": str(row0["LanguageName"]),
+            "dialect": dialect,
+            "displayName": _display_name(str(row0["LanguageName"]), dialect),
             "source": f"PHOIBLE:{row0['Source']}",
             "phonemes": phonemes,
         }
-        (inv_dir / f"{iso}.json").write_text(
+        (inv_dir / f"{_key_for(iso, int(inv_id))}.json").write_text(
             json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         written += 1

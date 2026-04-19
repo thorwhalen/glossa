@@ -33,8 +33,8 @@ export async function fetchLanguagesIndex(): Promise<LanguagesIndex> {
   return LanguagesIndexSchema.parse(raw);
 }
 
-export async function fetchInventory(iso: string): Promise<Inventory> {
-  const raw = await loadJson(`${DATA_BASE}/inventories/${iso}.json`);
+export async function fetchInventory(key: string): Promise<Inventory> {
+  const raw = await loadJson(`${DATA_BASE}/inventories/${key}.json`);
   return InventorySchema.parse(raw);
 }
 

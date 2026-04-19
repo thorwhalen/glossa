@@ -75,12 +75,16 @@ export function Home() {
           <>
             <ul className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3">
               {SUGGESTED.map((iso) => {
-                const lang = data.languages.find((l) => l.iso === iso);
+                // Prefer the primary inventory for each suggested ISO.
+                const lang =
+                  data.languages.find(
+                    (l) => l.iso === iso && l.isPrimary
+                  ) ?? data.languages.find((l) => l.iso === iso);
                 if (!lang) return null;
                 return (
-                  <li key={lang.iso}>
+                  <li key={lang.key}>
                     <Link
-                      to={`/lang/${lang.iso}`}
+                      to={`/lang/${lang.key}`}
                       className="block rounded-md border border-neutral-200 bg-white px-4 py-3 shadow-sm transition hover:border-accent hover:shadow-md dark:border-neutral-800 dark:bg-neutral-900"
                     >
                       <span className="block font-medium">{lang.name}</span>
@@ -96,7 +100,7 @@ export function Home() {
               to="/languages"
               className="inline-flex items-center gap-2 text-sm font-medium text-accent hover:underline"
             >
-              Browse all {data.count.toLocaleString()} languages →
+              Browse all {data.count.toLocaleString()} inventories →
             </Link>
           </>
         )}

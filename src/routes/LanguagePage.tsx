@@ -30,14 +30,22 @@ const MappingGraph = lazy(() =>
 type TabId = 'chart' | 'graphemes' | 'mapping';
 
 export function LanguagePage() {
-  const { iso, symbol } = useParams<{ iso: string; symbol?: string }>();
+  // URL param :iso is actually a language key — either the ISO 639-3 code
+  // (for the primary inventory of that language) or `{iso}-{invId}` for a
+  // specific non-primary variant. We preserve the `iso` name for URL
+  // back-compat.
+  const { iso: key, symbol } = useParams<{ iso: string; symbol?: string }>();
   const navigate = useNavigate();
-  const { data, isLoading, error } = useInventory(iso);
-  const { data: lexicon } = useLexicon(iso);
+  const { data, isLoading, error } = useInventory(key);
   const { play } = useAudio();
   const [tab, setTab] = useState<TabId>('chart');
 
-  const { data: gp } = useGraphemePhoneme(iso);
+  // Lexicon / grapheme-phoneme data is keyed by ISO (not inventory) because
+  // WikiPron aggregates across variants. We read the ISO off the loaded
+  // inventory so deep-links to `/lang/eng-2175` still get English lexicon data.
+  const actualIso = data?.iso;
+  const { data: lexicon } = useLexicon(actualIso);
+  const { data: gp } = useGraphemePhoneme(actualIso);
   const { data: phonemeIndex } = usePhonemeIndex();
   const { data: languagesIndex } = useLanguagesIndex();
 
@@ -47,9 +55,19 @@ export function LanguagePage() {
   );
 
   const summary = useMemo<LanguageSummary | undefined>(
-    () => languagesIndex?.languages.find((l) => l.iso === iso),
-    [languagesIndex, iso]
+    () => languagesIndex?.languages.find((l) => l.key === key),
+    [languagesIndex, key]
   );
+
+  /** All inventories for the same ISO — used for the variant selector. */
+  const siblingVariants = useMemo(() => {
+    if (!languagesIndex || !actualIso) return [];
+    return languagesIndex.languages
+      .filter((l) => l.iso === actualIso)
+      .sort((a, b) =>
+        a.isPrimary === b.isPrimary ? 0 : a.isPrimary ? -1 : 1
+      );
+  }, [languagesIndex, actualIso]);
 
   const medianPhonemeCount = useMemo(() => {
     if (!languagesIndex) return undefined;
@@ -62,8 +80,6 @@ export function LanguagePage() {
   const decodedSymbol = symbol ? decodeURIComponent(symbol) : null;
   const hasLexicon = Boolean(lexicon);
 
-  // Chart tiles are canonical base symbols. Clicking `e` in Swedish should
-  // open the detail for `eː` (the inventory variant). Resolve here.
   const resolveChartClick = (base: string): string => {
     if (!overlay) return base;
     const variants = overlay.baseToInventory.get(base);
@@ -71,13 +87,13 @@ export function LanguagePage() {
   };
 
   const selectPhoneme = (seg: string) => {
-    if (!iso) return;
+    if (!key) return;
     play(seg);
-    navigate(`/lang/${iso}/phoneme/${encodeURIComponent(seg)}`);
+    navigate(`/lang/${key}/phoneme/${encodeURIComponent(seg)}`);
   };
   const closePanel = () => {
-    if (!iso) return;
-    navigate(`/lang/${iso}`);
+    if (!key) return;
+    navigate(`/lang/${key}`);
   };
 
   return (
@@ -98,23 +114,35 @@ export function LanguagePage() {
         <p className="text-red-600">Error loading inventory: {String(error)}</p>
       )}
 
-      {data && overlay && iso && (
+      {data && overlay && key && actualIso && (
         <>
           <header className="mb-8">
             <h1 className="text-3xl font-semibold tracking-tight">
               {data.name}
             </h1>
-            <p className="mt-1 text-sm text-neutral-500">
+            {data.dialect && (
+              <p className="mt-1 text-base text-neutral-600 dark:text-neutral-400">
+                {data.dialect}
+              </p>
+            )}
+            <p className="mt-2 text-sm text-neutral-500">
               {data.iso} · {data.phonemes.length} phonemes · source:{' '}
               {data.source}
               {' · '}
               <Link
-                to={`/compare/${iso}`}
+                to={`/compare/${key}`}
                 className="text-accent hover:underline"
               >
                 compare with another
               </Link>
             </p>
+            {siblingVariants.length > 1 && (
+              <VariantSelector
+                activeKey={key}
+                variants={siblingVariants}
+                onPick={(k) => navigate(`/lang/${k}`)}
+              />
+            )}
           </header>
 
           <Tabs
@@ -157,12 +185,12 @@ export function LanguagePage() {
               />
             </>
           )}
-          {tab === 'graphemes' && <GraphemeTab iso={iso} />}
+          {tab === 'graphemes' && <GraphemeTab iso={actualIso} />}
           {tab === 'mapping' && (
             <Suspense
               fallback={<p className="text-neutral-500">Loading graph…</p>}
             >
-              <MappingGraph iso={iso} />
+              <MappingGraph iso={actualIso} />
             </Suspense>
           )}
 
@@ -174,6 +202,37 @@ export function LanguagePage() {
         </>
       )}
     </main>
+  );
+}
+
+function VariantSelector({
+  activeKey,
+  variants,
+  onPick,
+}: {
+  activeKey: string;
+  variants: LanguageSummary[];
+  onPick: (key: string) => void;
+}) {
+  return (
+    <div className="mt-4 flex items-center gap-2 text-sm">
+      <label className="text-neutral-500" htmlFor="variant-select">
+        Variant:
+      </label>
+      <select
+        id="variant-select"
+        value={activeKey}
+        onChange={(e) => onPick(e.target.value)}
+        className="max-w-full truncate rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent dark:border-neutral-700 dark:bg-neutral-900"
+      >
+        {variants.map((v) => (
+          <option key={v.key} value={v.key}>
+            {v.displayName}
+            {v.isPrimary ? ' (primary)' : ''} · {v.phonemeCount} phonemes
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 

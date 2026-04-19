@@ -11,12 +11,13 @@ import { IpaVowelChart } from '../features/chart/IpaVowelChart';
  * or query param `?with=xyz`.
  */
 export function ComparePage() {
-  const { iso } = useParams<{ iso: string }>();
+  // `:iso` URL param is actually a language key (may be ISO or `iso-invId`).
+  const { iso: key } = useParams<{ iso: string }>();
   const [params, setParams] = useSearchParams();
-  const otherIso = params.get('with') ?? null;
+  const otherKey = params.get('with') ?? null;
 
-  const a = useInventory(iso);
-  const b = useInventory(otherIso ?? undefined);
+  const a = useInventory(key);
+  const b = useInventory(otherKey ?? undefined);
   const { data: langsData } = useLanguagesIndex();
   const { play } = useAudio();
 
@@ -45,8 +46,8 @@ export function ComparePage() {
   return (
     <main className="mx-auto max-w-6xl px-6 py-12">
       <nav className="mb-6 text-sm">
-        <Link to={`/lang/${iso}`} className="text-accent hover:underline">
-          ← back to {a.data?.name ?? iso}
+        <Link to={`/lang/${key}`} className="text-accent hover:underline">
+          ← back to {a.data?.displayName ?? a.data?.name ?? key}
         </Link>
       </nav>
 
@@ -54,9 +55,9 @@ export function ComparePage() {
         <h1 className="text-3xl font-semibold tracking-tight">Compare</h1>
         {a.data && (
           <p className="mt-1 text-sm text-neutral-500">
-            {a.data.name}{' '}
+            {a.data.displayName || a.data.name}{' '}
             <span className="mx-1 text-neutral-400">vs.</span>
-            {b.data ? b.data.name : '—'}
+            {b.data ? b.data.displayName || b.data.name : '—'}
           </p>
         )}
       </header>
@@ -68,7 +69,7 @@ export function ComparePage() {
           </label>
           <select
             id="other"
-            value={otherIso ?? ''}
+            value={otherKey ?? ''}
             onChange={(e) =>
               setParams(
                 e.target.value ? { with: e.target.value } : {},
@@ -79,17 +80,17 @@ export function ComparePage() {
           >
             <option value="">choose a language…</option>
             {langsData.languages
-              .filter((l) => l.iso !== iso)
+              .filter((l) => l.key !== key && l.isPrimary)
               .map((l) => (
-                <option key={l.iso} value={l.iso}>
-                  {l.name} ({l.iso})
+                <option key={l.key} value={l.key}>
+                  {l.displayName} ({l.iso})
                 </option>
               ))}
           </select>
         </div>
       )}
 
-      {!otherIso && (
+      {!otherKey && (
         <div className="rounded-lg border border-dashed border-neutral-300 p-8 text-center dark:border-neutral-700">
           <p className="text-sm text-neutral-500">
             Pick a second language above to compare.
@@ -102,12 +103,12 @@ export function ComparePage() {
           <div className="mb-8 grid gap-4 sm:grid-cols-3">
             <Stat label="Shared" value={shared.size} tone="accent" />
             <Stat
-              label={`Only in ${a.data.name}`}
+              label={`Only in ${a.data.displayName || a.data.name}`}
               value={onlyA.length}
               tone="a"
             />
             <Stat
-              label={`Only in ${b.data.name}`}
+              label={`Only in ${b.data.displayName || b.data.name}`}
               value={onlyB.length}
               tone="b"
             />

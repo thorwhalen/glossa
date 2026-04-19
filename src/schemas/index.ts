@@ -5,9 +5,23 @@ import { z } from 'zod';
 // =========================================================================
 
 export const LanguageSummarySchema = z.object({
+  /**
+   * URL-safe identifier for this specific inventory. Equals the ISO 639-3
+   * code for the primary (largest) inventory of each language, or
+   * `{iso}-{inventoryId}` for additional inventories. PHOIBLE has multiple
+   * inventories per ISO (e.g. ~9 variants of English), and `key` lets us
+   * surface all of them without collapsing them under one banner.
+   */
+  key: z.string(),
   iso: z.string(),
+  inventoryId: z.number().int(),
+  isPrimary: z.boolean(),
   glottocode: z.string().nullable(),
   name: z.string(),
+  /** PHOIBLE's SpecificDialect column, when present. */
+  dialect: z.string().nullable(),
+  /** Pre-formatted human label, e.g. "English (American) — Western US". */
+  displayName: z.string(),
   family: z.string().nullable(),
   macroarea: z.string().nullable(),
   latitude: z.number().nullable(),
@@ -47,11 +61,16 @@ export const PhonemeSchema = z.object({
 export type Phoneme = z.infer<typeof PhonemeSchema>;
 
 export const InventorySchema = z.object({
+  /** See LanguageSummary.key. */
+  key: z.string(),
   iso: z.string(),
   glottocode: z.string().nullable(),
   inventoryId: z.union([z.string(), z.number()]),
+  isPrimary: z.boolean().default(true),
   name: z.string(),
-  source: z.string(), // e.g. "PHOIBLE:UPSID"
+  dialect: z.string().nullable().default(null),
+  displayName: z.string().default(''),
+  source: z.string(),
   phonemes: z.array(PhonemeSchema),
 });
 export type Inventory = z.infer<typeof InventorySchema>;

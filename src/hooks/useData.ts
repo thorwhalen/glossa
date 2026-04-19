@@ -17,11 +17,11 @@ export function useLanguagesIndex() {
   });
 }
 
-export function useInventory(iso: string | undefined) {
+export function useInventory(key: string | undefined) {
   return useQuery({
-    queryKey: ['inventory', iso],
-    queryFn: () => fetchInventory(iso!),
-    enabled: Boolean(iso),
+    queryKey: ['inventory', key],
+    queryFn: () => fetchInventory(key!),
+    enabled: Boolean(key),
     staleTime: Infinity,
     gcTime: Infinity,
   });
