@@ -62,24 +62,74 @@ export function layoutAlphabetic(edges: Edge[]): BipartiteLayout {
   };
 }
 
+export type DegreeDriver = 'grapheme' | 'phoneme';
+export type SortDirection = 'desc' | 'asc';
+
 /**
- * Sort each side by descending edge-weight sum. Hubs rise to the top.
+ * Sort the "driver" side by its total edge weight (ascending or descending).
+ * Order the other side via a single barycenter sweep so edges stay as
+ * straight as possible given the fixed driver order.
+ *
+ * Four concrete combinations:
+ *   driver='grapheme', direction='desc'  — graphemes ranked by fan-out,
+ *     most-connected at top; phonemes follow to minimize crossings
+ *   driver='grapheme', direction='asc'   — least-connected graphemes first
+ *   driver='phoneme', direction='desc'   — phoneme hubs on top
+ *   driver='phoneme', direction='asc'    — rarest phonemes on top
  */
-export function layoutByDegree(edges: Edge[]): BipartiteLayout {
+export function layoutByDegree(
+  edges: Edge[],
+  opts: { driver?: DegreeDriver; direction?: SortDirection } = {}
+): BipartiteLayout {
+  const driver = opts.driver ?? 'grapheme';
+  const direction = opts.direction ?? 'desc';
   const { a, b } = uniqueNodes(edges);
-  const { weightA, weightB } = buildAdjacency(edges);
-  return {
-    layerA: [...a].sort(
-      (x, y) =>
-        (weightB.get(y) ?? 0) - // tiebreak by labels? skip for now
-        (weightB.get(x) ?? 0) ||
-        (weightA.get(y) ?? 0) - (weightA.get(x) ?? 0)
-    ),
-    layerB: [...b].sort(
-      (x, y) =>
-        (weightB.get(y) ?? 0) - (weightB.get(x) ?? 0) || x.localeCompare(y)
-    ),
+  const { adjA, adjB, weightA, weightB } = buildAdjacency(edges);
+
+  const cmp = (wx: number, wy: number) =>
+    direction === 'desc' ? wy - wx : wx - wy;
+
+  // Sort the driver by its weight with stable label tiebreak.
+  const sortedDriver =
+    driver === 'grapheme'
+      ? [...a].sort(
+          (x, y) =>
+            cmp(weightA.get(x) ?? 0, weightA.get(y) ?? 0) ||
+            x.localeCompare(y)
+        )
+      : [...b].sort(
+          (x, y) =>
+            cmp(weightB.get(x) ?? 0, weightB.get(y) ?? 0) ||
+            x.localeCompare(y)
+        );
+
+  // One-sweep barycenter on the other side relative to the fixed driver.
+  const driverPos = new Map(sortedDriver.map((n, i) => [n, i]));
+  const otherNodes = driver === 'grapheme' ? b : a;
+  const otherAdj = driver === 'grapheme' ? adjB : adjA;
+
+  const bary = (node: string): number => {
+    const neighbors = otherAdj.get(node) ?? [];
+    if (neighbors.length === 0) return Number.POSITIVE_INFINITY;
+    let sum = 0;
+    let n = 0;
+    for (const nb of neighbors) {
+      const p = driverPos.get(nb);
+      if (p !== undefined) {
+        sum += p;
+        n++;
+      }
+    }
+    return n > 0 ? sum / n : Number.POSITIVE_INFINITY;
   };
+
+  const sortedOther = [...otherNodes].sort(
+    (x, y) => bary(x) - bary(y) || x.localeCompare(y)
+  );
+
+  return driver === 'grapheme'
+    ? { layerA: sortedDriver, layerB: sortedOther }
+    : { layerA: sortedOther, layerB: sortedDriver };
 }
 
 /**
