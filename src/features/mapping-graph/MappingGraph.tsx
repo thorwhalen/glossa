@@ -104,6 +104,32 @@ export function MappingGraph({ iso }: Props) {
     );
   }
 
+  // Lexicon present but the aligner couldn't produce meaningful pairs.
+  // This is the common failure mode for syllabaries / abugidas (Korean
+  // Hangul, Japanese kana, Devanagari) where word length and IPA segment
+  // count rarely match 1:1.
+  if (edges.length < 5) {
+    return (
+      <div className="rounded-lg border border-dashed border-neutral-300 p-8 text-center dark:border-neutral-700">
+        <p className="text-sm text-neutral-500">
+          Not enough grapheme↔phoneme data to draw a meaningful graph for
+          this language.
+        </p>
+        <p className="mt-1 text-xs text-neutral-400">
+          The v1 aligner zips word characters with IPA segments 1-to-1, which
+          works poorly for syllabaries and abugidas. A smarter aligner (or a
+          language-specific G2P tool like Epitran) would be needed.
+        </p>
+        {gp.mappings.length > 0 && (
+          <p className="mt-3 text-xs text-neutral-500">
+            We observed {gp.mappings.length} alignment pair
+            {gp.mappings.length === 1 ? '' : 's'} in the lexicon.
+          </p>
+        )}
+      </div>
+    );
+  }
+
   const selectPhoneme = (p: string) =>
     navigate(`/lang/${iso}/phoneme/${encodeURIComponent(p)}`);
 

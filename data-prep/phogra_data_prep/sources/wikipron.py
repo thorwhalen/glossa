@@ -65,7 +65,7 @@ _KINDS = ("narrow", "broad")
 #     interesting data point (same phoneme set, two script systems).
 _ISO_REMAPS: dict[str, list[tuple[str, frozenset[str] | None]]] = {
     "hrv": [("hbs", frozenset({"latn"}))],
-    "srp": [("hbs", None)],
+    "srp": [("hbs", frozenset({"cyrl"}))],  # Cyrillic only — Latin goes to hrv
 }
 
 # Reverse: source_iso → list of (target_iso, script_filter).

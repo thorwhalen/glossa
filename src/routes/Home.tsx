@@ -4,10 +4,13 @@ import { useAudio } from '../hooks/useAudio';
 import { IpaConsonantChart } from '../features/chart/IpaConsonantChart';
 import { IpaVowelChart } from '../features/chart/IpaVowelChart';
 
-// Suggested languages for the landing page. Keep in sync with
-// data-prep/phogra_data_prep/sources/wikipron.py SUGGESTED_ISOS.
+// Suggested languages for the landing page. Entries are inventory keys, so
+// we can pick a specific variant (e.g. British RP) instead of whatever
+// PHOIBLE inventory happens to be largest for that ISO.
+// Keep the ISO set in sync with data-prep/.../wikipron.py SUGGESTED_ISOS.
 const SUGGESTED = [
-  'eng',
+  'eng-2252', // English — English (RP)
+  'eng-2175', // English (American) — Western / Mid-Western US
   'fra',
   'spa',
   'deu',
@@ -74,20 +77,31 @@ export function Home() {
         {data && (
           <>
             <ul className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {SUGGESTED.map((iso) => {
-                // Prefer the primary inventory for each suggested ISO.
+              {SUGGESTED.map((keyOrIso) => {
+                // Resolve by exact key first (e.g. `eng-2252`), then fall back
+                // to the primary inventory for an ISO.
                 const lang =
+                  data.languages.find((l) => l.key === keyOrIso) ??
                   data.languages.find(
-                    (l) => l.iso === iso && l.isPrimary
-                  ) ?? data.languages.find((l) => l.iso === iso);
+                    (l) => l.iso === keyOrIso && l.isPrimary
+                  );
                 if (!lang) return null;
+                // For variant-specific suggestions, show the dialect in place
+                // of the generic name so users can tell them apart at a glance.
+                const label = lang.isPrimary
+                  ? lang.name
+                  : lang.dialect
+                    ? `${lang.name} — ${lang.dialect}`
+                    : lang.displayName;
                 return (
                   <li key={lang.key}>
                     <Link
                       to={`/lang/${lang.key}`}
                       className="block rounded-md border border-neutral-200 bg-white px-4 py-3 shadow-sm transition hover:border-accent hover:shadow-md dark:border-neutral-800 dark:bg-neutral-900"
                     >
-                      <span className="block font-medium">{lang.name}</span>
+                      <span className="block truncate font-medium">
+                        {label}
+                      </span>
                       <span className="mt-1 block text-xs text-neutral-500">
                         {lang.iso} · {lang.phonemeCount} phonemes
                       </span>

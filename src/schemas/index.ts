@@ -42,8 +42,15 @@ export type LanguagesIndex = z.infer<typeof LanguagesIndexSchema>;
 // Phoneme inventory (one per language, at inventories/{iso}.json)
 // =========================================================================
 
-// PHOIBLE distinctive features — binary or ternary (+, -, 0)
-export const FeatureValueSchema = z.enum(['+', '-', '0', '+,-', '-,+']);
+/**
+ * PHOIBLE feature value. Single segments are '+', '-', or '0'. Multi-segment
+ * units (diphthongs, clusters) use comma-separated per-slot values such as
+ * '+,-' (two slots) or '+,-,+' (three slots). We accept any such string
+ * rather than a closed enum so rare long combinations don't crash the UI.
+ */
+export const FeatureValueSchema = z
+  .string()
+  .regex(/^[+\-0](,[+\-0])*$/, 'invalid feature value');
 export type FeatureValue = z.infer<typeof FeatureValueSchema>;
 
 export const PhonemeSchema = z.object({

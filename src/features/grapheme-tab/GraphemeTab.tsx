@@ -59,6 +59,22 @@ export function GraphemeTab({ iso }: Props) {
     );
   }
 
+  if (graphemes.length < 3) {
+    return (
+      <div className="rounded-lg border border-dashed border-neutral-300 p-8 text-center dark:border-neutral-700">
+        <p className="text-sm text-neutral-500">
+          Not enough grapheme↔phoneme alignments to populate this tab.
+        </p>
+        <p className="mt-1 text-xs text-neutral-400">
+          The v1 aligner zips word characters with IPA segments 1-to-1, which
+          fails for syllabaries (Hangul) and abugidas (Devanagari). Only{' '}
+          {gp.mappings.length} alignment pair
+          {gp.mappings.length === 1 ? '' : 's'} were recoverable.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div>
       <p className="mb-3 text-xs text-neutral-500">
