@@ -23,21 +23,31 @@ export interface BipartiteLayout {
 }
 
 /**
- * Build adjacency maps. `adjA[g] = list of phonemes`, `adjB[p] = list of graphemes`.
- * `weightA[g] = total edge count for g`, same for B.
+ * Build adjacency maps + two kinds of "degree" for each node:
+ *   degreeA[g]    = number of distinct phonemes g maps to (fan-out)
+ *   weightA[g]    = sum of edge weights (total observations) for g
+ *
+ * Degree and weight can diverge: a grapheme mapping to one phoneme 1000× has
+ * weight 1000 but degree 1, while a grapheme mapping to 5 phonemes 10× each
+ * has weight 50 but degree 5. The UI sorts by *degree* by default because
+ * that matches the intuitive "how many distinct edges go out of this node".
  */
 function buildAdjacency(edges: Edge[]) {
   const adjA = new Map<string, string[]>();
   const adjB = new Map<string, string[]>();
   const weightA = new Map<string, number>();
   const weightB = new Map<string, number>();
+  const degreeA = new Map<string, number>();
+  const degreeB = new Map<string, number>();
   for (const { a, b, w } of edges) {
     (adjA.get(a) ?? (adjA.set(a, []), adjA.get(a)!)).push(b);
     (adjB.get(b) ?? (adjB.set(b, []), adjB.get(b)!)).push(a);
     weightA.set(a, (weightA.get(a) ?? 0) + w);
     weightB.set(b, (weightB.get(b) ?? 0) + w);
+    degreeA.set(a, (degreeA.get(a) ?? 0) + 1);
+    degreeB.set(b, (degreeB.get(b) ?? 0) + 1);
   }
-  return { adjA, adjB, weightA, weightB };
+  return { adjA, adjB, weightA, weightB, degreeA, degreeB };
 }
 
 function uniqueNodes(edges: Edge[]): { a: string[]; b: string[] } {
@@ -84,21 +94,26 @@ export function layoutByDegree(
   const driver = opts.driver ?? 'grapheme';
   const direction = opts.direction ?? 'desc';
   const { a, b } = uniqueNodes(edges);
-  const { adjA, adjB, weightA, weightB } = buildAdjacency(edges);
+  const { adjA, adjB, weightA, weightB, degreeA, degreeB } =
+    buildAdjacency(edges);
 
-  const cmp = (wx: number, wy: number) =>
-    direction === 'desc' ? wy - wx : wx - wy;
+  const cmp = (dx: number, dy: number) =>
+    direction === 'desc' ? dy - dx : dx - dy;
 
-  // Sort the driver by its weight with stable label tiebreak.
+  // Primary sort: number of distinct edges (degree). Tiebreak: total edge
+  // weight (so among two graphemes with 3 targets each, the more-observed
+  // one wins). Final tiebreak: label — keeps the order deterministic.
   const sortedDriver =
     driver === 'grapheme'
       ? [...a].sort(
           (x, y) =>
+            cmp(degreeA.get(x) ?? 0, degreeA.get(y) ?? 0) ||
             cmp(weightA.get(x) ?? 0, weightA.get(y) ?? 0) ||
             x.localeCompare(y)
         )
       : [...b].sort(
           (x, y) =>
+            cmp(degreeB.get(x) ?? 0, degreeB.get(y) ?? 0) ||
             cmp(weightB.get(x) ?? 0, weightB.get(y) ?? 0) ||
             x.localeCompare(y)
         );

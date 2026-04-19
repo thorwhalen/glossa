@@ -248,7 +248,7 @@ const LAYOUT_HINTS: Record<LayoutId, string> = {
   barycenter:
     'Barycenter heuristic (Sugiyama). Orders each side so the average edge goes straight-across — minimizes visual crossings.',
   degree:
-    'One side sorted by edge-weight sum; the other side arranged via barycenter to minimize crossings given that fixed order.',
+    'One side sorted by number of distinct edges (fan-out / fan-in); ties broken by total weight. The other side arranged via barycenter to minimize crossings given that fixed order.',
   alphabetic:
     'Deterministic but structure-blind. Useful as a reference baseline when comparing languages.',
   force:
@@ -277,7 +277,7 @@ function DegreePicker({
   ];
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
-      <span className="text-neutral-500">Sort by edge count:</span>
+      <span className="text-neutral-500">Sort by # of edges:</span>
       <div
         role="tablist"
         aria-label="degree sort"
