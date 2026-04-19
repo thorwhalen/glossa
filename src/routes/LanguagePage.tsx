@@ -4,23 +4,20 @@ import { useInventory, useLexicon } from '../hooks/useData';
 import { useAudio } from '../hooks/useAudio';
 import { IpaConsonantChart } from '../features/chart/IpaConsonantChart';
 import { IpaVowelChart } from '../features/chart/IpaVowelChart';
+import { Suprasegmentals } from '../features/chart/Suprasegmentals';
 import { PhonemeDetail } from '../features/phoneme-detail/PhonemeDetail';
 import { GraphemeTab } from '../features/grapheme-tab/GraphemeTab';
 import { Tabs } from '../components/Tabs';
+import {
+  buildInventoryOverlay,
+  type InventoryOverlay,
+} from '../lib/ipa/inventoryOverlay';
 
-// react-force-graph-2d is ~400KB — load only when the mapping tab is opened.
 const MappingGraph = lazy(() =>
   import('../features/mapping-graph/MappingGraph').then((m) => ({
     default: m.MappingGraph,
   }))
 );
-import { allConsonantSegments } from '../lib/ipa/consonants';
-import { VOWELS } from '../lib/ipa/vowels';
-
-const CANONICAL_SEGMENTS = new Set([
-  ...allConsonantSegments(),
-  ...VOWELS.map((v) => v.segment),
-]);
 
 type TabId = 'chart' | 'graphemes' | 'mapping';
 
@@ -32,13 +29,21 @@ export function LanguagePage() {
   const { play } = useAudio();
   const [tab, setTab] = useState<TabId>('chart');
 
-  const activeSegments = useMemo(
-    () => (data ? new Set(data.phonemes.map((p) => p.segment)) : undefined),
+  const overlay = useMemo(
+    () => (data ? buildInventoryOverlay(data) : null),
     [data]
   );
 
   const decodedSymbol = symbol ? decodeURIComponent(symbol) : null;
   const hasLexicon = Boolean(lexicon);
+
+  // Chart tiles are canonical base symbols. Clicking `e` in Swedish should
+  // open the detail for `eː` (the inventory variant). Resolve here.
+  const resolveChartClick = (base: string): string => {
+    if (!overlay) return base;
+    const variants = overlay.baseToInventory.get(base);
+    return variants && variants.length > 0 ? variants[0] : base;
+  };
 
   const selectPhoneme = (seg: string) => {
     if (!iso) return;
@@ -68,7 +73,7 @@ export function LanguagePage() {
         <p className="text-red-600">Error loading inventory: {String(error)}</p>
       )}
 
-      {data && activeSegments && iso && (
+      {data && overlay && iso && (
         <>
           <header className="mb-8">
             <h1 className="text-3xl font-semibold tracking-tight">
@@ -113,9 +118,9 @@ export function LanguagePage() {
 
           {tab === 'chart' && (
             <ChartView
-              inventory={data}
-              activeSegments={activeSegments}
-              onSelect={selectPhoneme}
+              overlay={overlay}
+              onBaseClick={(base) => selectPhoneme(resolveChartClick(base))}
+              onDirectClick={selectPhoneme}
             />
           )}
           {tab === 'graphemes' && <GraphemeTab iso={iso} />}
@@ -139,13 +144,13 @@ export function LanguagePage() {
 }
 
 function ChartView({
-  inventory,
-  activeSegments,
-  onSelect,
+  overlay,
+  onBaseClick,
+  onDirectClick,
 }: {
-  inventory: import('../schemas').Inventory;
-  activeSegments: Set<string>;
-  onSelect: (s: string) => void;
+  overlay: InventoryOverlay;
+  onBaseClick: (base: string) => void;
+  onDirectClick: (segment: string) => void;
 }) {
   return (
     <>
@@ -155,8 +160,8 @@ function ChartView({
         </h2>
         <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
           <IpaConsonantChart
-            activeSegments={activeSegments}
-            onSelect={onSelect}
+            activeSegments={overlay.activeBases}
+            onSelect={onBaseClick}
           />
         </div>
       </section>
@@ -166,45 +171,20 @@ function ChartView({
           Vowels
         </h2>
         <div className="flex justify-center rounded-lg border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
-          <IpaVowelChart activeSegments={activeSegments} onSelect={onSelect} />
+          <IpaVowelChart
+            activeSegments={overlay.activeBases}
+            onSelect={onBaseClick}
+          />
         </div>
       </section>
 
-      <OffChartPhonemes
-        all={inventory.phonemes.map((p) => p.segment)}
-        onSelect={onSelect}
+      <Suprasegmentals
+        diphthongs={overlay.diphthongs}
+        tones={overlay.tones}
+        modifiedVariants={overlay.modifiedVariants}
+        offChart={overlay.offChart}
+        onSelect={onDirectClick}
       />
     </>
-  );
-}
-
-function OffChartPhonemes({
-  all,
-  onSelect,
-}: {
-  all: string[];
-  onSelect: (s: string) => void;
-}) {
-  const offChart = all.filter((s) => !CANONICAL_SEGMENTS.has(s));
-  if (offChart.length === 0) return null;
-
-  return (
-    <section>
-      <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500">
-        Other segments <span className="font-normal">({offChart.length})</span>
-      </h2>
-      <div className="flex flex-wrap gap-2">
-        {offChart.map((seg, i) => (
-          <button
-            type="button"
-            key={`${seg}-${i}`}
-            onClick={() => onSelect(seg)}
-            className="ipa rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-base shadow-sm transition hover:border-accent dark:border-neutral-800 dark:bg-neutral-900"
-          >
-            {seg}
-          </button>
-        ))}
-      </div>
-    </section>
   );
 }
