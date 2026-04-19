@@ -46,10 +46,33 @@ SUGGESTED_ISOS = [
     "tur",
     "pol",
     "swe",
+    "hrv",
+    "srp",  # Serbian — WikiPron has both _cyrl_ and _latn_; we merge them
+    # so the bipartite graph shows both scripts mapping to one phoneme set.
 ]
 
 # WikiPron labels its IPA variants narrow (phonetic) vs broad (phonemic).
 _KINDS = ("narrow", "broad")
+
+# WikiPron groups some languages under macrolanguage codes. Where PHOIBLE
+# distinguishes languages that WikiPron merges, we spell out the remapping:
+# target_iso → list of (source_file_iso, allowed_scripts | None) pairs.
+# None = accept all scripts for that source iso.
+# Examples:
+#   Croatian (hrv): WikiPron has only `hbs_*` Serbo-Croatian TSVs. Restrict to
+#     Latin since Croatian isn't normally written in Cyrillic.
+#   Serbian (srp): same `hbs_*` source but keep both scripts — that's the
+#     interesting data point (same phoneme set, two script systems).
+_ISO_REMAPS: dict[str, list[tuple[str, frozenset[str] | None]]] = {
+    "hrv": [("hbs", frozenset({"latn"}))],
+    "srp": [("hbs", None)],
+}
+
+# Reverse: source_iso → list of (target_iso, script_filter).
+_SOURCE_TO_TARGETS: dict[str, list[tuple[str, frozenset[str] | None]]] = {}
+for tgt, sources in _ISO_REMAPS.items():
+    for src_iso, scripts in sources:
+        _SOURCE_TO_TARGETS.setdefault(src_iso, []).append((tgt, scripts))
 
 _GITHUB_LIST_URL = (
     "https://api.github.com/repos/CUNY-CL/wikipron/contents/data/scrape/tsv"
@@ -73,18 +96,49 @@ def _list_remote_tsvs(session: requests.Session) -> list[str]:
     return [item["name"] for item in r.json() if item["name"].endswith(".tsv")]
 
 
-def _is_wanted(filename: str) -> bool:
-    """Filter to (suggested-iso) × (un-filtered) × (broad|narrow)."""
+def _parse_filename(filename: str) -> tuple[str, str, str] | None:
+    """Return (iso, script, kind) from an unfiltered `iso_script_..._kind.tsv`
+    filename, else None. Script can be multi-char ('latn', 'cyrl', …).
+    Some filenames have dialect suffixes between script and kind (e.g.
+    `eng_latn_us_broad.tsv`); we ignore those for grouping.
+    """
     if filename.endswith("_filtered.tsv"):
-        # Prefer un-filtered variants — the filtered ones are a subset.
-        return False
+        return None
     stem = filename[: -len(".tsv")]
     bits = stem.split("_")
     if len(bits) < 3:
-        return False
+        return None
     iso = bits[0]
+    script = bits[1]
     kind = bits[-1]
-    return iso in set(SUGGESTED_ISOS) and kind in _KINDS
+    if kind not in _KINDS:
+        return None
+    return iso, script, kind
+
+
+def _targets_for_source(iso: str, script: str) -> list[str]:
+    """Which of our SUGGESTED_ISOS should receive entries from this source file?
+
+    Direct match: iso is in SUGGESTED_ISOS → return [iso].
+    Remapped match: iso is a source for one or more target ISOs → return those
+    whose script filter matches.
+    """
+    out: list[str] = []
+    if iso in SUGGESTED_ISOS:
+        out.append(iso)
+    for tgt, script_filter in _SOURCE_TO_TARGETS.get(iso, []):
+        if script_filter is None or script in script_filter:
+            out.append(tgt)
+    return out
+
+
+def _is_wanted(filename: str) -> bool:
+    """True if this TSV maps to at least one target ISO."""
+    parts = _parse_filename(filename)
+    if parts is None:
+        return False
+    iso, script, _ = parts
+    return bool(_targets_for_source(iso, script))
 
 
 def fetch(cache_dir: Path) -> Path:
@@ -160,22 +214,25 @@ def _parse_tsv(path: Path, kind: str) -> list[dict[str, Any]]:
 
 
 def parse(raw_path: Path) -> dict[str, list[dict[str, Any]]]:
-    """Walk raw_path/*.tsv → {iso: [LexiconEntry]} (sampled & capped)."""
+    """Walk raw_path/*.tsv → {target_iso: [LexiconEntry]} (sampled & capped).
+
+    Each source TSV may feed multiple target ISOs via `_ISO_REMAPS` (e.g.
+    `hbs_latn_broad.tsv` feeds both hrv and srp).
+    """
     rng = random.Random(0xC0FFEE)
     per_iso: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
     for tsv in sorted(raw_path.glob("*.tsv")):
-        if tsv.stem.endswith("_filtered"):
+        parts = _parse_filename(tsv.name)
+        if parts is None:
             continue
-        # filename: iso_script[_dialect]_kind.tsv
-        bits = tsv.stem.split("_")
-        if len(bits) < 3:
+        src_iso, script, kind = parts
+        targets = _targets_for_source(src_iso, script)
+        if not targets:
             continue
-        iso = bits[0]
-        kind = bits[-1]
-        if kind not in _KINDS:
-            continue
-        per_iso[iso].extend(_parse_tsv(tsv, kind))
+        entries = _parse_tsv(tsv, kind)
+        for target_iso in targets:
+            per_iso[target_iso].extend(entries)
 
     # Cap per language.
     capped: dict[str, list[dict[str, Any]]] = {}

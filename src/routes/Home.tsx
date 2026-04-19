@@ -23,6 +23,8 @@ const SUGGESTED = [
   'tur',
   'pol',
   'swe',
+  'hrv',
+  'srp',
 ];
 
 export function Home() {
