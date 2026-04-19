@@ -94,42 +94,51 @@ export function layoutByDegree(
   const driver = opts.driver ?? 'grapheme';
   const direction = opts.direction ?? 'desc';
   const { a, b } = uniqueNodes(edges);
-  const { adjA, adjB, weightA, weightB, degreeA, degreeB } =
-    buildAdjacency(edges);
+  const { adjA, adjB, degreeA, degreeB } = buildAdjacency(edges);
 
-  const cmp = (dx: number, dy: number) =>
-    direction === 'desc' ? dy - dx : dx - dy;
-
-  // Primary sort: number of distinct edges (degree). Tiebreak: total edge
-  // weight (so among two graphemes with 3 targets each, the more-observed
-  // one wins). Final tiebreak: label — keeps the order deterministic.
-  const sortedDriver =
-    driver === 'grapheme'
-      ? [...a].sort(
-          (x, y) =>
-            cmp(degreeA.get(x) ?? 0, degreeA.get(y) ?? 0) ||
-            cmp(weightA.get(x) ?? 0, weightA.get(y) ?? 0) ||
-            x.localeCompare(y)
-        )
-      : [...b].sort(
-          (x, y) =>
-            cmp(degreeB.get(x) ?? 0, degreeB.get(y) ?? 0) ||
-            cmp(weightB.get(x) ?? 0, weightB.get(y) ?? 0) ||
-            x.localeCompare(y)
-        );
-
-  // One-sweep barycenter on the other side relative to the fixed driver.
-  const driverPos = new Map(sortedDriver.map((n, i) => [n, i]));
+  const driverNodes = driver === 'grapheme' ? a : b;
   const otherNodes = driver === 'grapheme' ? b : a;
+  const driverDeg = driver === 'grapheme' ? degreeA : degreeB;
+  const driverAdj = driver === 'grapheme' ? adjA : adjB;
   const otherAdj = driver === 'grapheme' ? adjB : adjA;
 
-  const bary = (node: string): number => {
-    const neighbors = otherAdj.get(node) ?? [];
+  const degCmp = (x: string, y: string) => {
+    const dx = driverDeg.get(x) ?? 0;
+    const dy = driverDeg.get(y) ?? 0;
+    return direction === 'desc' ? dy - dx : dx - dy;
+  };
+
+  /**
+   * Constrained barycenter: the driver side is strictly ranked by degree
+   * (which is what the user picked). Within each degree-group, we are free
+   * to reorder — and we do, using barycenter, so ties resolve toward fewer
+   * edge crossings. The non-driver side is ordered purely by barycenter.
+   *
+   * Iterate until neither ordering changes, or give up after MAX_ITERS.
+   */
+  const MAX_ITERS = 20;
+  let sortedDriver = [...driverNodes].sort(
+    (x, y) => degCmp(x, y) || x.localeCompare(y)
+  );
+  let sortedOther = [...otherNodes];
+
+  const makePos = (arr: string[]) => {
+    const m = new Map<string, number>();
+    arr.forEach((x, i) => m.set(x, i));
+    return m;
+  };
+
+  const barycenter = (
+    node: string,
+    adj: Map<string, string[]>,
+    pos: Map<string, number>
+  ): number => {
+    const neighbors = adj.get(node) ?? [];
     if (neighbors.length === 0) return Number.POSITIVE_INFINITY;
     let sum = 0;
     let n = 0;
     for (const nb of neighbors) {
-      const p = driverPos.get(nb);
+      const p = pos.get(nb);
       if (p !== undefined) {
         sum += p;
         n++;
@@ -138,9 +147,33 @@ export function layoutByDegree(
     return n > 0 ? sum / n : Number.POSITIVE_INFINITY;
   };
 
-  const sortedOther = [...otherNodes].sort(
-    (x, y) => bary(x) - bary(y) || x.localeCompare(y)
-  );
+  for (let i = 0; i < MAX_ITERS; i++) {
+    // Re-order the non-driver side purely by barycenter relative to driver.
+    const driverPos = makePos(sortedDriver);
+    const nextOther = [...sortedOther].sort((x, y) => {
+      const bx = barycenter(x, otherAdj, driverPos);
+      const by = barycenter(y, otherAdj, driverPos);
+      return bx - by || x.localeCompare(y);
+    });
+
+    // Re-order the driver: primary key = degree-direction (unchanged across
+    // iterations), secondary = barycenter toward the just-updated other side.
+    const otherPos = makePos(nextOther);
+    const nextDriver = [...sortedDriver].sort((x, y) => {
+      const cmp = degCmp(x, y);
+      if (cmp !== 0) return cmp;
+      const bx = barycenter(x, driverAdj, otherPos);
+      const by = barycenter(y, driverAdj, otherPos);
+      return bx - by || x.localeCompare(y);
+    });
+
+    const stable =
+      nextDriver.every((v, j) => v === sortedDriver[j]) &&
+      nextOther.every((v, j) => v === sortedOther[j]);
+    sortedDriver = nextDriver;
+    sortedOther = nextOther;
+    if (stable) break;
+  }
 
   return driver === 'grapheme'
     ? { layerA: sortedDriver, layerB: sortedOther }

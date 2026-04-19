@@ -6,7 +6,6 @@ import {
   layoutAlphabetic,
   layoutByBarycenter,
   layoutByDegree,
-  type DegreeDriver,
   type Edge,
   type SortDirection,
 } from '../../lib/graph/bipartite';
@@ -18,7 +17,12 @@ const ForceLayout = lazy(() =>
   import('./ForceLayout').then((m) => ({ default: m.ForceLayout }))
 );
 
-type LayoutId = 'barycenter' | 'degree' | 'alphabetic' | 'force';
+type LayoutId =
+  | 'barycenter'
+  | 'degree-grapheme'
+  | 'degree-phoneme'
+  | 'alphabetic'
+  | 'force';
 type PinnedNode = { kind: 'grapheme' | 'phoneme'; symbol: string } | null;
 
 interface Props {
@@ -31,10 +35,10 @@ export function MappingGraph({ iso }: Props) {
   const { data: gp, isLoading } = useGraphemePhoneme(iso);
   const navigate = useNavigate();
   const [layoutId, setLayoutId] = useState<LayoutId>('barycenter');
-  const [degreeDriver, setDegreeDriver] =
-    useState<DegreeDriver>('grapheme');
-  const [degreeDirection, setDegreeDirection] =
-    useState<SortDirection>('desc');
+  // Per-driver sort direction — remembered across layout switches, so
+  // toggling "Graphemes" away and back preserves its chosen arrow.
+  const [grapDir, setGrapDir] = useState<SortDirection>('desc');
+  const [phonDir, setPhonDir] = useState<SortDirection>('desc');
   const [pinned, setPinned] = useState<PinnedNode>(null);
 
   const edges: Edge[] = useMemo(() => {
@@ -50,17 +54,22 @@ export function MappingGraph({ iso }: Props) {
     switch (layoutId) {
       case 'barycenter':
         return layoutByBarycenter(edges);
-      case 'degree':
+      case 'degree-grapheme':
         return layoutByDegree(edges, {
-          driver: degreeDriver,
-          direction: degreeDirection,
+          driver: 'grapheme',
+          direction: grapDir,
+        });
+      case 'degree-phoneme':
+        return layoutByDegree(edges, {
+          driver: 'phoneme',
+          direction: phonDir,
         });
       case 'alphabetic':
         return layoutAlphabetic(edges);
       default:
         return layoutByBarycenter(edges);
     }
-  }, [edges, layoutId, degreeDriver, degreeDirection]);
+  }, [edges, layoutId, grapDir, phonDir]);
 
   const crossings = useMemo(() => {
     if (layoutId === 'force' || edges.length === 0) return null;
@@ -152,8 +161,24 @@ export function MappingGraph({ iso }: Props) {
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap items-center gap-3 text-sm">
-        <LayoutPicker value={layoutId} onChange={setLayoutId} />
+      <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
+        <LayoutPicker
+          value={layoutId}
+          grapDir={grapDir}
+          phonDir={phonDir}
+          onPick={(id) => {
+            // Clicking a degree button while already active flips its arrow.
+            if (id === 'degree-grapheme' && layoutId === 'degree-grapheme') {
+              setGrapDir(grapDir === 'desc' ? 'asc' : 'desc');
+              return;
+            }
+            if (id === 'degree-phoneme' && layoutId === 'degree-phoneme') {
+              setPhonDir(phonDir === 'desc' ? 'asc' : 'desc');
+              return;
+            }
+            setLayoutId(id);
+          }}
+        />
         <div className="flex flex-1 flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500">
           <span>
             Top {edges.length} edges · {bipartiteLayout.layerA.length} graphemes ·{' '}
@@ -178,19 +203,6 @@ export function MappingGraph({ iso }: Props) {
           )}
         </div>
       </div>
-
-      {layoutId === 'degree' && (
-        <div className="mb-4">
-          <DegreePicker
-            driver={degreeDriver}
-            direction={degreeDirection}
-            onChange={(d, dir) => {
-              setDegreeDriver(d);
-              setDegreeDirection(dir);
-            }}
-          />
-        </div>
-      )}
 
       <div className="rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950">
         {layoutId === 'force' ? (
@@ -247,77 +259,38 @@ export function MappingGraph({ iso }: Props) {
 const LAYOUT_HINTS: Record<LayoutId, string> = {
   barycenter:
     'Barycenter heuristic (Sugiyama). Orders each side so the average edge goes straight-across — minimizes visual crossings.',
-  degree:
-    'One side sorted by number of distinct edges (fan-out / fan-in); ties broken by total weight. The other side arranged via barycenter to minimize crossings given that fixed order.',
+  'degree-grapheme':
+    'Graphemes ranked by number of distinct edges (fan-out). Ties among equal-fan-out graphemes are resolved by barycenter, so crossings are minimized within each tier.',
+  'degree-phoneme':
+    'Phonemes ranked by number of distinct edges (fan-in). Ties among equal-fan-in phonemes are resolved by barycenter, so crossings are minimized within each tier.',
   alphabetic:
     'Deterministic but structure-blind. Useful as a reference baseline when comparing languages.',
   force:
     'Physics-based clusters. Connected nodes pull together; unrelated ones repel. Good for seeing communities; worse for reading specific edges.',
 };
 
-function DegreePicker({
-  driver,
-  direction,
-  onChange,
-}: {
-  driver: DegreeDriver;
-  direction: SortDirection;
-  onChange: (d: DegreeDriver, dir: SortDirection) => void;
-}) {
-  const options: Array<{
-    id: string;
-    label: string;
-    driver: DegreeDriver;
-    direction: SortDirection;
-  }> = [
-    { id: 'g-desc', label: 'Graphemes ↓', driver: 'grapheme', direction: 'desc' },
-    { id: 'g-asc', label: 'Graphemes ↑', driver: 'grapheme', direction: 'asc' },
-    { id: 'p-desc', label: 'Phonemes ↓', driver: 'phoneme', direction: 'desc' },
-    { id: 'p-asc', label: 'Phonemes ↑', driver: 'phoneme', direction: 'asc' },
-  ];
-  return (
-    <div className="flex flex-wrap items-center gap-2 text-xs">
-      <span className="text-neutral-500">Sort by # of edges:</span>
-      <div
-        role="tablist"
-        aria-label="degree sort"
-        className="inline-flex overflow-hidden rounded-md border border-neutral-300 dark:border-neutral-700"
-      >
-        {options.map((o) => {
-          const active = o.driver === driver && o.direction === direction;
-          return (
-            <button
-              key={o.id}
-              role="tab"
-              aria-selected={active}
-              type="button"
-              onClick={() => onChange(o.driver, o.direction)}
-              className={[
-                'px-2.5 py-1 tabular-nums transition',
-                active
-                  ? 'bg-accent text-white'
-                  : 'bg-white text-neutral-600 hover:bg-neutral-50 dark:bg-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800',
-              ].join(' ')}
-            >
-              {o.label}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function LayoutPicker({
   value,
-  onChange,
+  grapDir,
+  phonDir,
+  onPick,
 }: {
   value: LayoutId;
-  onChange: (v: LayoutId) => void;
+  grapDir: SortDirection;
+  phonDir: SortDirection;
+  onPick: (id: LayoutId) => void;
 }) {
+  const arrow = (dir: SortDirection) => (dir === 'desc' ? '↓' : '↑');
   const options: Array<{ id: LayoutId; label: string }> = [
     { id: 'barycenter', label: 'Min crossings' },
-    { id: 'degree', label: 'By degree' },
+    {
+      id: 'degree-grapheme',
+      label: `Graphemes ${arrow(grapDir)}`,
+    },
+    {
+      id: 'degree-phoneme',
+      label: `Phonemes ${arrow(phonDir)}`,
+    },
     { id: 'alphabetic', label: 'Alphabetic' },
     { id: 'force', label: 'Force' },
   ];
@@ -327,23 +300,31 @@ function LayoutPicker({
       aria-label="graph layout"
       className="inline-flex overflow-hidden rounded-md border border-neutral-300 dark:border-neutral-700"
     >
-      {options.map((o) => (
-        <button
-          key={o.id}
-          role="tab"
-          aria-selected={value === o.id}
-          type="button"
-          onClick={() => onChange(o.id)}
-          className={[
-            'px-3 py-1.5 text-xs transition',
-            value === o.id
-              ? 'bg-accent text-white'
-              : 'bg-white text-neutral-600 hover:bg-neutral-50 dark:bg-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800',
-          ].join(' ')}
-        >
-          {o.label}
-        </button>
-      ))}
+      {options.map((o) => {
+        const active = value === o.id;
+        const isDegree =
+          o.id === 'degree-grapheme' || o.id === 'degree-phoneme';
+        return (
+          <button
+            key={o.id}
+            role="tab"
+            aria-selected={active}
+            type="button"
+            onClick={() => onPick(o.id)}
+            title={
+              active && isDegree ? 'click again to reverse direction' : undefined
+            }
+            className={[
+              'px-3 py-1.5 text-xs transition',
+              active
+                ? 'bg-accent text-white'
+                : 'bg-white text-neutral-600 hover:bg-neutral-50 dark:bg-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800',
+            ].join(' ')}
+          >
+            {o.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
