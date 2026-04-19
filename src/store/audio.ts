@@ -106,17 +106,22 @@ export const useAudioStore = create<AudioState>((set, get) => ({
 
 /**
  * Derive the status for a *specific* symbol — "idle" if the store is
- * tracking a different symbol. Useful for per-row speaker icons that only
- * want to light up when they themselves are active.
+ * tracking a different symbol. Useful for per-row speaker icons.
+ *
+ * Must return primitives from each selector (not a composite object) —
+ * Zustand v5's default Object.is equality treats a fresh object as changed
+ * every render, which breaks `getSnapshot` caching. Two narrow selectors
+ * keep snapshots stable.
  */
 export function useSymbolStatus(symbol: string | undefined): {
   status: AudioStatus;
   errorMessage: string | null;
 } {
-  return useAudioStore((s) => {
-    if (!symbol || s.symbol !== symbol) {
-      return { status: 'idle' as const, errorMessage: null };
-    }
-    return { status: s.status, errorMessage: s.errorMessage };
-  });
+  const status = useAudioStore((s) =>
+    symbol && s.symbol === symbol ? s.status : ('idle' as AudioStatus)
+  );
+  const errorMessage = useAudioStore((s) =>
+    symbol && s.symbol === symbol ? s.errorMessage : null
+  );
+  return { status, errorMessage };
 }

@@ -18,7 +18,13 @@ import { useAudioStore, type AudioStatus } from '../store/audio';
  *   error   → "Could not load /p/ — {reason}"
  */
 export function AudioStatusToast() {
-  const { symbol, status, errorMessage, tick } = useAudioStore();
+  // Subscribe to each field individually — Zustand v5 wants stable
+  // snapshots per selector, so we avoid the `useAudioStore()` full-state
+  // shorthand that returns a fresh object on every change.
+  const symbol = useAudioStore((s) => s.symbol);
+  const status = useAudioStore((s) => s.status);
+  const errorMessage = useAudioStore((s) => s.errorMessage);
+  const tick = useAudioStore((s) => s.tick);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
