@@ -1,6 +1,7 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGraphemePhoneme } from '../../hooks/useData';
+import { useAudio } from '../../hooks/useAudio';
 import {
   countCrossings,
   layoutAlphabetic,
@@ -34,6 +35,7 @@ const MAX_EDGES = 200;
 export function MappingGraph({ iso }: Props) {
   const { data: gp, isLoading } = useGraphemePhoneme(iso);
   const navigate = useNavigate();
+  const { play } = useAudio();
   const [layoutId, setLayoutId] = useState<LayoutId>('barycenter');
   // Per-driver sort direction — remembered across layout switches, so
   // toggling "Graphemes" away and back preserves its chosen arrow.
@@ -224,6 +226,7 @@ export function MappingGraph({ iso }: Props) {
               pinned={pinned}
               onPinNode={handlePin}
               onSelectPhoneme={selectPhoneme}
+              onPlayPhoneme={play}
             />
           </div>
         )}

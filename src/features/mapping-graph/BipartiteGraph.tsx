@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { BipartiteLayout, Edge } from '../../lib/graph/bipartite';
+import { hasAudio } from '../../lib/ipa/audio';
 
 interface Props {
   edges: Edge[];
@@ -12,6 +13,8 @@ interface Props {
   onPinNode?: (kind: 'grapheme' | 'phoneme', symbol: string) => void;
   /** Which node, if any, is currently pinned (sticky highlight). */
   pinned?: { kind: 'grapheme' | 'phoneme'; symbol: string } | null;
+  /** Fires when the speaker icon next to a phoneme label is clicked. */
+  onPlayPhoneme: (phoneme: string) => void;
 }
 
 const NODE_RADIUS = 11;
@@ -40,6 +43,7 @@ export function BipartiteGraph({
   onSelectPhoneme,
   onPinNode,
   pinned,
+  onPlayPhoneme,
 }: Props) {
   const [hovered, setHovered] = useState<string | null>(null);
 
@@ -257,6 +261,13 @@ export function BipartiteGraph({
               >
                 {p}
               </text>
+              {hasAudio(p) && (
+                <SpeakerIcon
+                  cx={COL_RIGHT + LABEL_OFFSET + 30}
+                  cy={0}
+                  onPlay={() => onPlayPhoneme(p)}
+                />
+              )}
             </motion.g>
           );
         })}
@@ -273,4 +284,63 @@ function indexPositions(arr: string[]): Map<string, number> {
   const m = new Map<string, number>();
   arr.forEach((x, i) => m.set(x, i));
   return m;
+}
+
+/**
+ * Small inline speaker icon for phoneme rows that have a Commons recording.
+ * Rendered directly in SVG (rather than via <foreignObject> + lucide) so it
+ * plays well with the framer-motion-animated parent group.
+ */
+function SpeakerIcon({
+  cx,
+  cy,
+  onPlay,
+}: {
+  cx: number;
+  cy: number;
+  onPlay: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+  const stroke = hover ? '#0d7377' : 'currentColor';
+  const opacity = hover ? 1 : 0.5;
+  return (
+    <g
+      transform={`translate(${cx}, ${cy})`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onPlay();
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{ cursor: 'pointer' }}
+      role="button"
+      aria-label="play phoneme"
+    >
+      {/* invisible hit target — makes the icon easier to tap on mobile */}
+      <rect x={-8} y={-8} width={20} height={16} fill="transparent" />
+      {/* speaker body + cone */}
+      <path
+        d="M-5 -2 L-2 -2 L1 -4 L1 4 L-2 2 L-5 2 Z"
+        fill={stroke}
+        opacity={opacity}
+      />
+      {/* sound waves */}
+      <path
+        d="M3 -2 Q5 0 3 2"
+        fill="none"
+        stroke={stroke}
+        strokeWidth={1}
+        strokeLinecap="round"
+        opacity={opacity}
+      />
+      <path
+        d="M5 -4 Q8 0 5 4"
+        fill="none"
+        stroke={stroke}
+        strokeWidth={1}
+        strokeLinecap="round"
+        opacity={opacity * 0.6}
+      />
+    </g>
+  );
 }
