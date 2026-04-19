@@ -63,6 +63,7 @@ _RAW_URL = (
 MAX_ENTRIES_PER_LANG = 2000
 # Examples per phoneme in the alignment summary.
 MAX_EXAMPLES_PER_PHONEME = 5
+MAX_EXAMPLES_PER_EDGE = 8
 
 
 def _list_remote_tsvs(session: requests.Session) -> list[str]:
@@ -189,35 +190,57 @@ def parse(raw_path: Path) -> dict[str, list[dict[str, Any]]]:
 def _build_alignment(
     iso: str, entries: list[dict[str, Any]]
 ) -> dict[str, Any]:
-    """1-to-1 grapheme↔phoneme counts + examples per phoneme."""
+    """1-to-1 grapheme↔phoneme counts + examples.
+
+    Emits three parallel example indices so the UI can hover a grapheme,
+    hover a phoneme, or hover an edge and always show a concrete word:
+
+    - examples[phoneme]               — N shortest words using the phoneme
+    - edgeExamples["{g}|{p}"]         — N shortest words that produced the
+                                        (g, p) alignment pair specifically
+    - mappings[i].examples            — same list mirrored onto the mapping
+                                        row for convenience
+    """
     pair_counts: Counter[tuple[str, str]] = Counter()
     examples: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    # Bucket words by phoneme so we can pick the shortest later.
     phoneme_words: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    edge_words: dict[tuple[str, str], list[str]] = defaultdict(list)
 
     for e in entries:
         word = e["word"]
         segs = e["pronunciation"]
-        # Zip only if lengths match — keeps the heuristic honest.
         if len(word) == len(segs):
             for ch, ph in zip(word, segs):
                 pair_counts[(ch, ph)] += 1
+                edge_words[(ch, ph)].append(word)
         for ph in set(segs):
             phoneme_words[ph].append({"word": word, "ipa": segs})
 
-    # Pick up to N shortest example words per phoneme.
     for ph, items in phoneme_words.items():
         items.sort(key=lambda x: (len(x["word"]), x["word"]))
         examples[ph] = items[:MAX_EXAMPLES_PER_PHONEME]
 
+    # Dedupe + pick shortest per edge. These are plain strings (not objects)
+    # because the IPA is redundant with the edge key itself.
+    edge_examples: dict[str, list[str]] = {}
+    for (g, p), words in edge_words.items():
+        uniq = sorted(set(words), key=lambda w: (len(w), w))
+        edge_examples[f"{g}|{p}"] = uniq[:MAX_EXAMPLES_PER_EDGE]
+
     mappings = [
-        {"grapheme": g, "phoneme": p, "count": c}
+        {
+            "grapheme": g,
+            "phoneme": p,
+            "count": c,
+            "examples": edge_examples.get(f"{g}|{p}", [])[:3],
+        }
         for (g, p), c in pair_counts.most_common()
     ]
     return {
         "iso": iso,
         "mappings": mappings,
         "examples": examples,
+        "edgeExamples": edge_examples,
     }
 
 

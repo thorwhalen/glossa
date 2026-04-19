@@ -110,6 +110,7 @@ export const GraphemePhonemeEntrySchema = z.object({
   grapheme: z.string(),
   phoneme: z.string(),
   count: z.number().int(),
+  examples: z.array(z.string()).default([]),
 });
 export type GraphemePhonemeEntry = z.infer<typeof GraphemePhonemeEntrySchema>;
 
@@ -123,6 +124,11 @@ export const GraphemePhonemeSchema = z.object({
   iso: z.string(),
   mappings: z.array(GraphemePhonemeEntrySchema),
   examples: z.record(z.string(), z.array(ExampleWordSchema)),
+  /**
+   * Keyed by `"{grapheme}|{phoneme}"` — ordered short words that produced
+   * that alignment pair. Optional for back-compat with older bundles.
+   */
+  edgeExamples: z.record(z.string(), z.array(z.string())).default({}),
 });
 export type GraphemePhoneme = z.infer<typeof GraphemePhonemeSchema>;
 

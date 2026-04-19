@@ -1,17 +1,25 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useInventory, useLexicon } from '../hooks/useData';
+import {
+  useGraphemePhoneme,
+  useInventory,
+  useLanguagesIndex,
+  useLexicon,
+  usePhonemeIndex,
+} from '../hooks/useData';
 import { useAudio } from '../hooks/useAudio';
 import { IpaConsonantChart } from '../features/chart/IpaConsonantChart';
 import { IpaVowelChart } from '../features/chart/IpaVowelChart';
 import { Suprasegmentals } from '../features/chart/Suprasegmentals';
 import { PhonemeDetail } from '../features/phoneme-detail/PhonemeDetail';
 import { GraphemeTab } from '../features/grapheme-tab/GraphemeTab';
+import { FunFacts } from '../features/fun-facts/FunFacts';
 import { Tabs } from '../components/Tabs';
 import {
   buildInventoryOverlay,
   type InventoryOverlay,
 } from '../lib/ipa/inventoryOverlay';
+import type { LanguageSummary } from '../schemas';
 
 const MappingGraph = lazy(() =>
   import('../features/mapping-graph/MappingGraph').then((m) => ({
@@ -29,10 +37,27 @@ export function LanguagePage() {
   const { play } = useAudio();
   const [tab, setTab] = useState<TabId>('chart');
 
+  const { data: gp } = useGraphemePhoneme(iso);
+  const { data: phonemeIndex } = usePhonemeIndex();
+  const { data: languagesIndex } = useLanguagesIndex();
+
   const overlay = useMemo(
     () => (data ? buildInventoryOverlay(data) : null),
     [data]
   );
+
+  const summary = useMemo<LanguageSummary | undefined>(
+    () => languagesIndex?.languages.find((l) => l.iso === iso),
+    [languagesIndex, iso]
+  );
+
+  const medianPhonemeCount = useMemo(() => {
+    if (!languagesIndex) return undefined;
+    const sorted = [...languagesIndex.languages]
+      .map((l) => l.phonemeCount)
+      .sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  }, [languagesIndex]);
 
   const decodedSymbol = symbol ? decodeURIComponent(symbol) : null;
   const hasLexicon = Boolean(lexicon);
@@ -117,11 +142,20 @@ export function LanguagePage() {
           />
 
           {tab === 'chart' && (
-            <ChartView
-              overlay={overlay}
-              onBaseClick={(base) => selectPhoneme(resolveChartClick(base))}
-              onDirectClick={selectPhoneme}
-            />
+            <>
+              <ChartView
+                overlay={overlay}
+                onBaseClick={(base) => selectPhoneme(resolveChartClick(base))}
+                onDirectClick={selectPhoneme}
+              />
+              <FunFacts
+                inventory={data}
+                summary={summary}
+                gp={gp}
+                phonemeIndex={phonemeIndex}
+                medianPhonemeCount={medianPhonemeCount}
+              />
+            </>
           )}
           {tab === 'graphemes' && <GraphemeTab iso={iso} />}
           {tab === 'mapping' && (
