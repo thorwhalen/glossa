@@ -6,6 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Phoneme ↔ Grapheme Explorer</title>
     <meta name="description" content="Browse the sound systems of the world's languages — IPA charts, grapheme mappings, and audio." />
+    <!-- Warm the browser cache for the landing-page blocker in parallel
+         with the JS bundle download. The `crossorigin=anonymous` + fetch
+         `credentials: 'omit'` pair ensures Chrome reuses the preloaded
+         response rather than double-fetching. -->
+    <link rel="preload" as="fetch" type="application/json" crossorigin="anonymous" href="%BASE_URL%data/languages.json" />
   </head>
   <body>
     <div id="root"></div>

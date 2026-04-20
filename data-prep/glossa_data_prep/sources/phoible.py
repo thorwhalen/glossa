@@ -114,6 +114,11 @@ def emit(df: pd.DataFrame, out: Path) -> None:
         return lang_name
 
     # --- languages.json: one entry per (iso, inventoryId) ---
+    # Keep this file slim — it's the landing-page blocker and gets downloaded
+    # by every first-time visitor. Drop nullable fields rather than writing
+    # `null`s, and skip fields the UI doesn't read (inventoryId, family,
+    # macroarea, latitude, longitude, sources — the per-inventory file has
+    # them when needed). See README "Data pipeline" for the schema contract.
     languages: list[dict[str, Any]] = []
     for (iso, inv_id), grp in df.groupby(["ISO6393", "InventoryID"]):
         if not isinstance(iso, str) or not iso:
@@ -125,32 +130,30 @@ def emit(df: pd.DataFrame, out: Path) -> None:
             and row0["SpecificDialect"].strip()
             else None
         )
-        is_primary = inv_id in primary_inv_ids
-        languages.append(
-            {
-                "key": _key_for(iso, int(inv_id)),
-                "iso": iso,
-                "inventoryId": int(inv_id),
-                "isPrimary": bool(is_primary),
-                "glottocode": (
-                    row0["Glottocode"]
-                    if isinstance(row0["Glottocode"], str) and row0["Glottocode"]
-                    else None
-                ),
-                "name": str(row0["LanguageName"]),
-                "dialect": dialect,
-                "displayName": _display_name(str(row0["LanguageName"]), dialect),
-                "family": None,
-                "macroarea": None,
-                "latitude": None,
-                "longitude": None,
-                "phonemeCount": int(len(grp)),
-                "sources": [f"PHOIBLE:{row0['Source']}"],
-            }
+        glottocode = (
+            row0["Glottocode"]
+            if isinstance(row0["Glottocode"], str) and row0["Glottocode"]
+            else None
         )
+        name = str(row0["LanguageName"])
+        entry: dict[str, Any] = {
+            "key": _key_for(iso, int(inv_id)),
+            "iso": iso,
+            "isPrimary": bool(inv_id in primary_inv_ids),
+            "name": name,
+            "displayName": _display_name(name, dialect),
+            "phonemeCount": int(len(grp)),
+        }
+        if dialect:
+            entry["dialect"] = dialect
+        if glottocode:
+            entry["glottocode"] = glottocode
+        languages.append(entry)
     # Sort: primary first within each language name group, then alphabetical.
     languages.sort(key=lambda r: (r["name"].lower(), not r["isPrimary"], r["key"]))
 
+    # Compact JSON (no indent) — this file is not human-read and the saved
+    # whitespace is another ~30% off the wire size.
     (out / "languages.json").write_text(
         json.dumps(
             {
@@ -159,7 +162,7 @@ def emit(df: pd.DataFrame, out: Path) -> None:
                 "languages": languages,
             },
             ensure_ascii=False,
-            indent=2,
+            separators=(",", ":"),
         ),
         encoding="utf-8",
     )

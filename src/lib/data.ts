@@ -21,7 +21,11 @@ import {
 const DATA_BASE = `${import.meta.env.BASE_URL}data`;
 
 async function loadJson(path: string): Promise<unknown> {
-  const res = await fetch(path);
+  // `credentials: 'omit'` matches the `crossorigin=anonymous` preload hint
+  // in index.html so the browser reuses the preloaded response. It's also
+  // correct on its own: every JSON under /data is public and static, so
+  // sending cookies would be noise.
+  const res = await fetch(path, { credentials: 'omit' });
   if (!res.ok) {
     throw new Error(`fetch ${path}: ${res.status} ${res.statusText}`);
   }

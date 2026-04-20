@@ -14,20 +14,15 @@ export const LanguageSummarySchema = z.object({
    */
   key: z.string(),
   iso: z.string(),
-  inventoryId: z.number().int(),
   isPrimary: z.boolean(),
-  glottocode: z.string().nullable(),
   name: z.string(),
-  /** PHOIBLE's SpecificDialect column, when present. */
-  dialect: z.string().nullable(),
   /** Pre-formatted human label, e.g. "English (American) — Western US". */
   displayName: z.string(),
-  family: z.string().nullable(),
-  macroarea: z.string().nullable(),
-  latitude: z.number().nullable(),
-  longitude: z.number().nullable(),
   phonemeCount: z.number().int(),
-  sources: z.array(z.string()),
+  /** PHOIBLE's SpecificDialect column, when present — omitted otherwise. */
+  dialect: z.string().optional(),
+  /** Glottolog code — omitted when PHOIBLE doesn't map this inventory. */
+  glottocode: z.string().optional(),
 });
 export type LanguageSummary = z.infer<typeof LanguageSummarySchema>;
 
