@@ -52,6 +52,11 @@ cat > "$LEGACY_TARGET/index.html" <<'EOF'
 </html>
 EOF
 
+# HUP is safe here: we only changed static frontend files, the venv is
+# untouched. If this script ever starts `pip install`-ing anything into
+# /opt/tw_platform/venv/, swap HUP for `systemctl restart enlace-backend`
+# — HUP'd workers inherit the master's in-memory sys.path and can fail
+# with ModuleNotFoundError after a venv rewrite.
 echo "==> reload gunicorn (graceful HUP)"
 MASTER="$(pgrep -f "$GUNICORN_PATTERN" | head -1)"
 if [[ -z "$MASTER" ]]; then

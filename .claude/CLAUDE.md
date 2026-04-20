@@ -92,10 +92,24 @@ The script: builds production bundle, rsyncs `dist/` to
 `apps/glossa/frontend/`, refreshes the `apps/phogra/frontend/` redirect
 stub, and sends `SIGHUP` to the gunicorn master for a zero-downtime reload.
 
-**Never** run `systemctl restart enlace-backend` — a plain restart has a few
-seconds of downtime and can surface startup errors that weren't there before.
-The HUP reload is gunicorn's built-in graceful-reload signal and is always
-the right tool here.
+**HUP vs restart — pick the right tool:**
+
+- **HUP** (what `scripts/deploy.sh` does) is correct when only the frontend
+  `dist/` or the Python **app code** in `/opt/tw_platform/apps/` has
+  changed. Gunicorn's master re-spawns workers without dropping the
+  listening socket, so there's no downtime.
+- **`systemctl restart enlace-backend`** is required after **any venv
+  mutation** — `pip install`, `pip install -e`, editable reinstalls,
+  dependency upgrades. Reason: gunicorn's master loads `site.py` (and
+  thus processes `.pth` files) once at startup. When you HUP, new workers
+  fork from the master and inherit its in-memory `sys.path`. If the
+  on-disk venv was rewritten after the master started, that `sys.path`
+  is stale and workers can fail to boot with `ModuleNotFoundError`
+  (systemd will auto-restart on failure, so the outage is short, but
+  it's still an outage).
+
+Rule of thumb: if anything under `/opt/tw_platform/venv/` changed, it's a
+restart. Otherwise, HUP.
 
 ## Dev conventions
 

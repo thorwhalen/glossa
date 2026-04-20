@@ -27,6 +27,12 @@ Redeploy with `./scripts/deploy.sh` (builds, rsyncs to
 redirect stub, sends `SIGHUP` to the gunicorn master for a zero-downtime
 reload).
 
+> HUP is the right signal here because only the static frontend changed.
+> After a venv mutation (`pip install`, editable reinstall, upgrade) you
+> must `systemctl restart enlace-backend` instead — HUP'd workers inherit
+> the master's stale `sys.path` and can fail to boot with
+> `ModuleNotFoundError`. See `.claude/CLAUDE.md` for the full rule.
+
 ## Running locally
 
 ```bash
