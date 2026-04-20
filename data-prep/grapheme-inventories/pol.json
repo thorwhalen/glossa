@@ -1,0 +1,19 @@
+{
+  "_comment": "Functional graphemes for Polish. Rich digraph system: ch (/x/), cz (/tʂ/), sz (/ʂ/), rz (/ʐ/), dz (/dz/), dź (/dʑ/), dż (/dʐ/). The sequence 'dzi' before a vowel also represents /dʑ/ — included as a trigraph. Accented single letters: ą, ę, ć, ł, ń, ó, ś, ź, ż.",
+  "graphemes": [
+    "dzi",
+    "dź", "dż", "dz",
+    "ch", "cz", "sz", "rz",
+    "a", "ą",
+    "b", "c", "ć", "d",
+    "e", "ę",
+    "f", "g", "h", "i", "j", "k",
+    "l", "ł",
+    "m", "n", "ń",
+    "o", "ó",
+    "p", "q", "r",
+    "s", "ś",
+    "t", "u", "v", "w", "x", "y",
+    "z", "ź", "ż"
+  ]
+}

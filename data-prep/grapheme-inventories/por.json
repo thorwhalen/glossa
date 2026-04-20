@@ -1,0 +1,19 @@
+{
+  "_comment": "Functional graphemes for Portuguese. Consonant digraphs ch/lh/nh; geminates rr/ss (pronounced as single phonemes); qu/gu; final nasals am/em/im/om/um; nasal diphthong graphs ão and õe. Covers both BR and EU varieties.",
+  "graphemes": [
+    "ch", "lh", "nh",
+    "rr", "ss", "qu", "gu",
+    "am", "em", "im", "om", "um",
+    "ão", "õe",
+    "a", "á", "â", "ã", "à",
+    "b", "c", "ç", "d",
+    "e", "é", "ê",
+    "f", "g", "h",
+    "i", "í",
+    "j", "k", "l", "m", "n",
+    "o", "ó", "ô", "õ",
+    "p", "q", "r", "s", "t",
+    "u", "ú", "ü",
+    "v", "w", "x", "y", "z"
+  ]
+}

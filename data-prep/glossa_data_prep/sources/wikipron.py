@@ -251,17 +251,33 @@ def _build_alignment(
 ) -> dict[str, Any]:
     """1-to-1 grapheme↔phoneme counts + examples.
 
-    Reconciliation pass (new): WikiPron phoneme symbols are canonicalized
-    to the PHOIBLE inventory's segments where possible (see reconcile.py),
-    so Mapping graph edges point at segments that actually show up on the
+    Reconciliation pass: WikiPron phoneme symbols are canonicalized to the
+    PHOIBLE inventory's segments where possible (see reconcile.py), so
+    Mapping graph edges point at segments that actually show up on the
     IPA chart. Prosodic markers (stress, liaison) are dropped before
     alignment.
+
+    Grapheme segmentation: when a per-language grapheme inventory exists
+    under `data-prep/grapheme-inventories/{iso}.json`, words are segmented
+    into multi-character graphemes (e.g. English `sh`, French `eau`,
+    German `sch`) via greedy longest-match with backtracking. Words that
+    fail to segment cleanly contribute no edges — better silence than
+    bogus 1-char edges like `s→ʃ` + `h→ʃ` for English "sh". Languages
+    without an inventory fall back to v0 single-char len-match alignment.
+    See issue #1.
     """
-    from ..reconcile import build_canonicalizer, load_inventory_segments, strip_prosody
+    from ..reconcile import (
+        build_canonicalizer,
+        load_grapheme_inventory,
+        load_inventory_segments,
+        segment_word,
+        strip_prosody,
+    )
 
     inv_segments = load_inventory_segments(out_dir, iso)
     canonicalize = build_canonicalizer(inv_segments) if inv_segments else None
     inv_exact = set(inv_segments) if inv_segments else set()
+    grapheme_inv = load_grapheme_inventory(iso)
 
     def canon(ph: str) -> tuple[str, bool]:
         """Return (canonical_phoneme, in_inventory)."""
@@ -277,6 +293,8 @@ def _build_alignment(
     phoneme_words: dict[str, list[dict[str, Any]]] = defaultdict(list)
     edge_words: dict[tuple[str, str], list[str]] = defaultdict(list)
     orphan_phonemes: set[str] = set()
+    segment_attempts = 0
+    segment_successes = 0
 
     for e in entries:
         word = e["word"]
@@ -288,12 +306,33 @@ def _build_alignment(
                 orphan_phonemes.add(s)
             segs.append(c)
 
-        if len(word) == len(segs):
-            for ch, ph in zip(word, segs):
-                pair_counts[(ch, ph)] += 1
-                edge_words[(ch, ph)].append(word)
+        # Produce alignment pairs. Two paths:
+        #   (1) We have a grapheme inventory for this language → use the
+        #       segmenter; skip when it fails (prefer silence over wrong).
+        #   (2) No inventory → v0 len-match. Coarse but harmless on the
+        #       languages where orthography is roughly 1:1.
+        aligned: list[tuple[str, str]] | None = None
+        if grapheme_inv is not None:
+            segment_attempts += 1
+            aligned = segment_word(word, segs, grapheme_inv)
+            if aligned is not None:
+                segment_successes += 1
+        elif len(word) == len(segs):
+            aligned = list(zip(word, segs))
+
+        if aligned is not None:
+            for gr, ph in aligned:
+                pair_counts[(gr, ph)] += 1
+                edge_words[(gr, ph)].append(word)
         for ph in set(segs):
             phoneme_words[ph].append({"word": word, "ipa": segs})
+
+    if grapheme_inv is not None and segment_attempts:
+        pct = 100 * segment_successes / segment_attempts
+        print(
+            f"  [{iso}] segmenter: {segment_successes}/{segment_attempts}"
+            f" ({pct:.0f}%) words segmented"
+        )
 
     for ph, items in phoneme_words.items():
         items.sort(key=lambda x: (len(x["word"]), x["word"]))

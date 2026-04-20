@@ -1,0 +1,12 @@
+{
+  "_comment": "Functional graphemes for Dutch. Long-vowel doubles (aa/ee/oo/uu) and the monophthongs ie/oe/eu map to single WikiPron phonemes — kept. Diphthongs (ij/ei/au/ou/ui) are encoded as two segments in WikiPron (e.g. 'zei' → ['z','ɛ','i̯']) and are therefore EXCLUDED — including them would make greedy v1 waste the digraph on half the diphthong. Consonant digraphs sch/ch/ng/nk map to single phonemes.",
+  "graphemes": [
+    "sch",
+    "aa", "ee", "oo", "uu",
+    "ie", "oe", "eu",
+    "ch", "ng", "nk",
+    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l",
+    "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x",
+    "y", "z"
+  ]
+}

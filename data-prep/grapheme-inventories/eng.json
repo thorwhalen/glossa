@@ -1,0 +1,11 @@
+{
+  "_comment": "Functional graphemes for English. Hand-authored. Only polygraphs that reliably map to ONE WikiPron phoneme are included — diphthong spellings (ai/ay/oa/oi/ou/ow/oy/igh/ew/ue/ui) are deliberately excluded because WikiPron encodes English diphthongs as two phonemes (e.g. 'boat' → ['b','o','ʊ','t']), and a greedy v1 segmenter would waste the digraph on just the first half. Single letters are included so backtracking can always fall back. Order inside this JSON is not significant; the segmenter sorts by length descending at load time. See issue #1 and README §Roadmap.",
+  "graphemes": [
+    "tch", "dge",
+    "sh", "ch", "th", "ph", "wh", "gh", "ng", "ck", "qu",
+    "kn", "wr", "mb", "gn", "ps", "rh", "sc",
+    "ee", "oo", "ea", "au", "aw",
+    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+    "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"
+  ]
+}

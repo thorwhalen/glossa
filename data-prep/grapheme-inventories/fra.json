@@ -1,0 +1,33 @@
+{
+  "_comment": "Functional graphemes for French. Covers the canonical digraphs/trigraphs (eau, ai, au, ou, oi, eu, ch, gn, qu, ill, gu, ph, th) plus accented letters. Single unaccented letters included as fallback.",
+  "graphemes": [
+    "eau",
+    "ain", "aim", "ein", "oin", "ill",
+    "ai", "au", "ay", "an", "am",
+    "ch", "ct", "cc",
+    "ei", "en", "em", "eu", "ez", "es", "er",
+    "gn", "gu",
+    "in", "im",
+    "oi", "on", "om", "ou", "oy",
+    "ph", "pp",
+    "qu",
+    "rr",
+    "ss",
+    "th", "tt",
+    "ue", "un", "um",
+    "a", "à", "â", "æ",
+    "b",
+    "c", "ç",
+    "d",
+    "e", "é", "è", "ê", "ë",
+    "f", "g", "h",
+    "i", "î", "ï",
+    "j", "k", "l", "m", "n",
+    "o", "ô", "œ",
+    "p", "q", "r", "s", "t",
+    "u", "ù", "û", "ü",
+    "v", "w", "x",
+    "y", "ÿ",
+    "z"
+  ]
+}

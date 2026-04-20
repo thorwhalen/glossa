@@ -1,0 +1,19 @@
+{
+  "_comment": "Functional graphemes for Italian. Digraphs: ch/gh (hard /k/,/g/ before e/i), gl (/ʎ/ before i), gn (/ɲ/), sc/sch (/ʃ/ before e/i, /sk/ elsewhere). Geminate consonants (cc, ll, tt, zz, …) collapse to one phoneme in most transcriptions.",
+  "graphemes": [
+    "sch",
+    "ch", "gh", "gl", "gn", "sc",
+    "cc", "gg", "ll", "mm", "nn", "pp", "rr", "ss", "tt", "zz",
+    "bb", "dd", "ff", "vv",
+    "a", "à",
+    "b", "c", "d",
+    "e", "è", "é",
+    "f", "g", "h",
+    "i", "ì", "í",
+    "j", "k", "l", "m", "n",
+    "o", "ò", "ó",
+    "p", "q", "r", "s", "t",
+    "u", "ù", "ú",
+    "v", "w", "x", "y", "z"
+  ]
+}

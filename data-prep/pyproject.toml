@@ -14,6 +14,9 @@ dependencies = [
 [project.scripts]
 glossa-data-prep = "glossa_data_prep.cli:main"
 
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

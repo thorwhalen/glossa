@@ -1,0 +1,18 @@
+{
+  "_comment": "Functional graphemes for Spanish. Shallow orthography — few true digraphs: ch, ll, rr. qu/gu are orthographic conventions for /k/ and /g/ before e/i. gü for /gw/. Accented vowels included.",
+  "graphemes": [
+    "ch", "ll", "rr", "qu", "gu", "gü",
+    "a", "á",
+    "b", "c", "d",
+    "e", "é",
+    "f", "g", "h",
+    "i", "í",
+    "j", "k", "l", "m", "n", "ñ",
+    "o", "ó",
+    "p", "q", "r", "s", "t",
+    "u", "ú", "ü",
+    "v", "w", "x",
+    "y", "ý",
+    "z"
+  ]
+}

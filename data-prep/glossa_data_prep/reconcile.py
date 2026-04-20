@@ -125,3 +125,90 @@ def load_inventory_segments(out_dir: Path, iso: str) -> list[str] | None:
         return None
     data = json.loads(path.read_text())
     return [p["segment"] for p in data.get("phonemes", [])]
+
+
+# ---------------------------------------------------------------------------
+# Grapheme segmentation (digraphs, trigraphs)
+# ---------------------------------------------------------------------------
+#
+# A language's *functional grapheme* is the smallest unit of writing that
+# maps to one phoneme. For alphabets with a shallow orthography that's one
+# character, but for English (`sh`, `ch`, `ough`), French (`eau`, `ai`),
+# German (`sch`, `pf`) etc. graphemes are multi-character. We model them as
+# a per-language list of allowed grapheme strings. See issue #1.
+
+GRAPHEME_INVENTORIES_DIR = Path(__file__).parent.parent / "grapheme-inventories"
+
+
+def load_grapheme_inventory(iso: str) -> list[str] | None:
+    """Read `data-prep/grapheme-inventories/{iso}.json` → sorted-long-first
+    list of allowed graphemes. Returns None if no file exists for this
+    language — callers should fall back to single-character alignment.
+
+    The inventory is sorted longest-first here so the segmenter can do
+    greedy longest-match without re-sorting on every call.
+    """
+    path = GRAPHEME_INVENTORIES_DIR / f"{iso}.json"
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    graphemes = data["graphemes"] if isinstance(data, dict) else data
+    # Lowercase + dedupe + length-desc sort. Lowercasing matches how
+    # segment_word compares: we casefold both sides.
+    seen: set[str] = set()
+    out: list[str] = []
+    for g in graphemes:
+        lg = g.casefold()
+        if lg and lg not in seen:
+            seen.add(lg)
+            out.append(lg)
+    out.sort(key=lambda s: (-len(s), s))
+    return out
+
+
+def segment_word(
+    word: str,
+    phonemes: list[str],
+    grapheme_inventory: list[str],
+) -> list[tuple[str, str]] | None:
+    """Greedy longest-match segmentation of `word` into graphemes from the
+    inventory, paired 1:1 with the phoneme sequence.
+
+    Returns a list `[(grapheme, phoneme), ...]` of length `len(phonemes)`
+    whose graphemes concatenate back to `word` (case-folded), or `None`
+    when no valid 1:1 split exists. Backtracks on longest-match dead-ends.
+
+    The inventory must already be sorted longest-first (call
+    `load_grapheme_inventory` or pre-sort); this function does NOT sort,
+    to keep the hot path cheap.
+
+    Pure function — no I/O, no globals.
+    """
+    w = word.casefold()
+    n_ph = len(phonemes)
+    n_w = len(w)
+
+    # Fast-path trivial case: equal length AND inventory has all single
+    # characters we need. Falls through to the full search otherwise.
+    def _search(wi: int, pi: int, acc: list[tuple[str, str]]) -> list[tuple[str, str]] | None:
+        if wi == n_w and pi == n_ph:
+            return acc
+        if wi >= n_w or pi >= n_ph:
+            return None
+        remaining_w = n_w - wi
+        remaining_p = n_ph - pi
+        # Pruning: each grapheme consumes >=1 char of word and exactly one
+        # phoneme. If we have more phonemes left than word-chars left, no
+        # split is possible. Cheap bailout, big speedup on impossible cases.
+        if remaining_p > remaining_w:
+            return None
+        for gr in grapheme_inventory:
+            if gr and w.startswith(gr, wi):
+                acc.append((gr, phonemes[pi]))
+                result = _search(wi + len(gr), pi + 1, acc)
+                if result is not None:
+                    return result
+                acc.pop()
+        return None
+
+    return _search(0, 0, [])

@@ -1,0 +1,18 @@
+{
+  "_comment": "Functional graphemes for German. Only polygraphs that reliably map to ONE WikiPron phoneme are included. WikiPron encodes German diphthongs as two segments (e.g. 'Dreier' → ['d','r','a','ɪ̯','ɐ']), so ai/au/ei/eu/äu are deliberately excluded — including them would make the greedy v1 waste the digraph on half the diphthong. 'ie' maps to a single long vowel /iː/ and IS kept.",
+  "graphemes": [
+    "tsch", "sch",
+    "ch", "ck", "dt",
+    "pf", "ph",
+    "qu",
+    "ss", "ß", "st", "sp",
+    "th", "tz",
+    "ie",
+    "a", "ä",
+    "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n",
+    "o", "ö",
+    "p", "q", "r", "s", "t",
+    "u", "ü",
+    "v", "w", "x", "y", "z"
+  ]
+}
