@@ -2,8 +2,8 @@
 
 Runs each registered source adapter in turn:
 
-    phogra-data-prep all        # fetch + parse + emit for every source
-    phogra-data-prep phoible    # run just one source
+    glossa-data-prep all        # fetch + parse + emit for every source
+    glossa-data-prep phoible    # run just one source
 """
 from __future__ import annotations
 

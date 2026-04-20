@@ -1,4 +1,4 @@
-"""phogra data-prep pipeline.
+"""glossa data-prep pipeline.
 
 Each source module under `sources/` exposes the plugin interface:
 

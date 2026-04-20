@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Moon, Sun } from 'lucide-react';
 import { AudioStatusToast } from './AudioStatusToast';
 
-const THEME_KEY = 'phogra-theme';
+const THEME_KEY = 'glossa-theme';
 
 function readInitialTheme(): 'light' | 'dark' {
   if (typeof window === 'undefined') return 'light';

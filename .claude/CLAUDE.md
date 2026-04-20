@@ -1,11 +1,13 @@
-# phogra
+# glossa
 
 **Phoneme ↔ Grapheme Explorer** — a static-deployed React app that lets you
 browse the phoneme inventory of any of ~2000 languages (PHOIBLE), see how
 graphemes map to phonemes (WikiPron), and hear each IPA segment pronounced
 (Wikimedia Commons).
 
-Deployed at **https://apps.thorwhalen.com/phogra/**.
+Deployed at **https://apps.thorwhalen.com/glossa/**. The old URL
+**/phogra/** is preserved as a redirect to `/glossa/` for back-compat
+(project was renamed phogra → glossa).
 
 ## Stack at a glance
 
@@ -38,16 +40,19 @@ scripts/deploy.sh     Build + rsync + HUP gunicorn (see Deploy)
 Regenerate all JSON bundles (PHOIBLE + WikiPron + alignments):
 
 ```bash
-cd data-prep && uv sync && uv run phogra-data-prep run-all
+cd data-prep && uv sync && uv run glossa-data-prep run-all
 ```
 
-Each source module under `data-prep/phogra_data_prep/sources/` exposes the
+Each source module under `data-prep/glossa_data_prep/sources/` exposes the
 same three-function plugin interface: `fetch(cache_dir)`, `parse(raw_path)`,
 `emit(parsed, out_dir)`. Adding a new source = drop a module in that dir and
 register it in `cli.py`'s `SOURCES` dict.
 
 **Important**: `public/data/` is gitignored. Bundles are 80+ MB and fully
-derivable from the data-prep pipeline. Never hand-edit them.
+derivable from the data-prep pipeline. Never hand-edit them. Corrective
+edits to prepared data should go through an _overlays_ layer (planned — see
+the repo README's "Roadmap" section) rather than by patching bundles in
+place.
 
 **Coverage notes**:
 - PHOIBLE: all 2094 languages (one inventory per ISO, biggest chosen)
@@ -62,15 +67,20 @@ derivable from the data-prep pipeline. Never hand-edit them.
 - `/lang/:iso/phoneme/:symbol` — same page + phoneme detail panel open (deep-linkable)
 - `/compare/:iso?with=:other` — side-by-side comparison
 
-The app is mounted under `/phogra/` in production. Vite's `base` + React
+The app is mounted under `/glossa/` in production. Vite's `base` + React
 Router's `basename` both read from the same config — see `vite.config.ts` and
 `src/main.tsx`. For local dev override with `VITE_BASE=/ npm run dev`.
 
 ## Deploy
 
-Target: `enlace` platform on the thorwhalen.com server. Phogra lives as a
-static-frontend-only app at `/opt/tw_platform/apps/phogra/frontend/` and gets
-mounted at `/phogra/` by enlace's auto-discovery.
+Target: `enlace` platform on the thorwhalen.com server. Glossa lives as a
+static-frontend-only app at `/opt/tw_platform/apps/glossa/frontend/` and
+gets mounted at `/glossa/` by enlace's auto-discovery.
+
+The old `/opt/tw_platform/apps/phogra/frontend/` directory is kept, but
+now contains only an `index.html` that 302-redirects any `/phogra/…` URL to
+the matching `/glossa/…` URL. The redirect stub is (re)written by
+`scripts/deploy.sh` every deploy — don't hand-edit it.
 
 **Redeploy from this server**:
 
@@ -78,8 +88,9 @@ mounted at `/phogra/` by enlace's auto-discovery.
 ./scripts/deploy.sh
 ```
 
-The script: builds production bundle, rsyncs `dist/` to the platform apps
-dir, and sends `SIGHUP` to the gunicorn master for a zero-downtime reload.
+The script: builds production bundle, rsyncs `dist/` to
+`apps/glossa/frontend/`, refreshes the `apps/phogra/frontend/` redirect
+stub, and sends `SIGHUP` to the gunicorn master for a zero-downtime reload.
 
 **Never** run `systemctl restart enlace-backend` — a plain restart has a few
 seconds of downtime and can surface startup errors that weren't there before.
@@ -107,7 +118,8 @@ the right tool here.
   choice in the UI.
 - **Korean grapheme tab is thin** (10 alignment pairs) — the v1 greedy 1:1
   aligner is weak for syllabaries/abugidas. Future work: per-language
-  alignment strategy.
+  alignment strategy + a grapheme model that admits multi-character units
+  (digraphs/trigraphs like `ch`, `ai`, `eau`).
 - **Language metadata is thin** — `family` / `macroarea` / coordinates are
   `null` until a Glottolog source adapter is written. Placeholder only.
 - **arb and cmn have no WikiPron lexicon** — the Graphemes and Mapping tabs

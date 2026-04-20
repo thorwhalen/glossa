@@ -19,7 +19,7 @@ const queryClient = new QueryClient({
 });
 
 // React Router needs to know the base path — matches Vite's BASE_URL so
-// routes like /lang/eng resolve correctly under e.g. /phogra/.
+// routes like /lang/eng resolve correctly under e.g. /glossa/.
 const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || '/';
 
 createRoot(document.getElementById('root')!).render(

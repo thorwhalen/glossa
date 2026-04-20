@@ -1,7 +1,7 @@
 [project]
-name = "phogra-data-prep"
+name = "glossa-data-prep"
 version = "0.1.0"
-description = "Data pipeline for phogra — downloads & transforms PHOIBLE, WikiPron, Wikimedia Commons audio into JSON bundles."
+description = "Data pipeline for glossa — downloads & transforms PHOIBLE, WikiPron, Wikimedia Commons audio into JSON bundles."
 requires-python = ">=3.11"
 dependencies = [
     "pandas>=2.1",
@@ -12,11 +12,11 @@ dependencies = [
 ]
 
 [project.scripts]
-phogra-data-prep = "phogra_data_prep.cli:main"
+glossa-data-prep = "glossa_data_prep.cli:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["phogra_data_prep"]
+packages = ["glossa_data_prep"]
