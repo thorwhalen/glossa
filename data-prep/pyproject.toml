@@ -9,6 +9,10 @@ dependencies = [
     "argh>=0.31",
     "pydantic>=2.5",
     "tqdm>=4.66",
+    # wordfreq provides Zipf word frequencies for ~40 languages, used to
+    # pick *recognizable* example words for each grapheme↔phoneme pair.
+    # See reconcile.best_example_key and issue #1 comment on this.
+    "wordfreq>=3.1",
 ]
 
 [project.scripts]

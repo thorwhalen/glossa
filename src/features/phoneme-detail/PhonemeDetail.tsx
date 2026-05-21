@@ -332,7 +332,8 @@ function DetailBody({
         <section className="border-b border-neutral-200 p-4 dark:border-neutral-800">
           <h3 className="mb-3 text-xs font-medium uppercase tracking-wide text-neutral-500">
             <BookOpen className="mr-1 inline" size={12} />
-            Example words
+            Words containing{' '}
+            <span className="ipa normal-case">/{phoneme.segment}/</span>
           </h3>
           <ul className="space-y-1.5 text-sm">
             {examples.slice(0, 5).map((ex, i) => (

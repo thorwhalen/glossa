@@ -212,3 +212,72 @@ def segment_word(
         return None
 
     return _search(0, 0, [])
+
+
+# ---------------------------------------------------------------------------
+# Word frequency (used to pick *recognizable* example words)
+# ---------------------------------------------------------------------------
+#
+# Without frequency data, examples for each edge are picked by "shortest
+# word first" — a crude proxy that often surfaces surnames, abbreviations,
+# or rare short words ("Ng", "SHU", "ashy") instead of everyday words.
+# wordfreq ships per-language Zipf frequencies for ~40 languages and lets
+# us pick words that a reader is actually likely to recognize.
+#
+# The natural data primitive for glossa's explanatory UI is a triple
+# (grapheme, phoneme, best_example_word) — see the issue #1 note on this.
+# This helper is what makes `best_example_word` meaningful.
+
+# ISO 639-3 → wordfreq's ISO 639-1 / BCP-47 code. Only listed explicitly
+# when wordfreq has data; unknown codes → `best_example_key` returns None
+# and callers fall back to length-based sort.
+_ISO_TO_WORDFREQ: dict[str, str] = {
+    "eng": "en",
+    "deu": "de",
+    "fra": "fr",
+    "spa": "es",
+    "ita": "it",
+    "por": "pt",
+    "nld": "nl",
+    "pol": "pl",
+    "rus": "ru",
+    "tur": "tr",
+    "hin": "hi",
+    "arb": "ar",
+    "swe": "sv",
+    # Croatian / Serbian share wordfreq's "sh" (Serbo-Croatian) data.
+    "hrv": "sh",
+    "srp": "sh",
+    # jpn/kor/cmn need MeCab/jieba — intentionally left out. Those
+    # languages are also the ones in this issue's "out of scope" list.
+}
+
+
+def best_example_key(iso: str) -> Callable[[str], tuple] | None:
+    """Return a sort key function for example words for this language, or
+    None if wordfreq has no data for it.
+
+    The returned key is suitable for `sorted(..., key=key)` — lower sort
+    value = better (more recognizable) example. Words not in the frequency
+    table get +inf and sort last, behind anything that IS known.
+
+    Secondary key is word length (shorter wins among equally-frequent
+    words), tertiary is alphabetical for determinism.
+    """
+    code = _ISO_TO_WORDFREQ.get(iso)
+    if code is None:
+        return None
+    try:
+        from wordfreq import zipf_frequency
+    except ImportError:
+        return None
+
+    def key(word: str) -> tuple:
+        # zipf_frequency picks the best wordlist wordfreq has for the
+        # language (large → small) and returns 0.0 for unknown words. We
+        # treat 0.0 as "worse than any known word" via +inf fallback.
+        z = zipf_frequency(word, code)
+        primary = -z if z > 0 else float("inf")
+        return (primary, len(word), word)
+
+    return key

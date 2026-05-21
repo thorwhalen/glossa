@@ -267,6 +267,7 @@ def _build_alignment(
     See issue #1.
     """
     from ..reconcile import (
+        best_example_key,
         build_canonicalizer,
         load_grapheme_inventory,
         load_inventory_segments,
@@ -278,6 +279,11 @@ def _build_alignment(
     canonicalize = build_canonicalizer(inv_segments) if inv_segments else None
     inv_exact = set(inv_segments) if inv_segments else set()
     grapheme_inv = load_grapheme_inventory(iso)
+    # Example-ordering key: frequency-aware when wordfreq knows the
+    # language, else fall back to (shortest-first, alphabetical).
+    freq_key = best_example_key(iso)
+    fallback_key = lambda w: (len(w), w)
+    example_key = freq_key or fallback_key
 
     def canon(ph: str) -> tuple[str, bool]:
         """Return (canonical_phoneme, in_inventory)."""
@@ -317,8 +323,13 @@ def _build_alignment(
             aligned = segment_word(word, segs, grapheme_inv)
             if aligned is not None:
                 segment_successes += 1
-        elif len(word) == len(segs):
-            aligned = list(zip(word, segs))
+        else:
+            # v0 fallback for languages without a grapheme inventory.
+            # casefold(): len may change (e.g. German ß → ss), so guard
+            # against the length diverging after normalization.
+            folded = word.casefold()
+            if len(folded) == len(segs):
+                aligned = list(zip(folded, segs))
 
         if aligned is not None:
             for gr, ph in aligned:
@@ -335,14 +346,14 @@ def _build_alignment(
         )
 
     for ph, items in phoneme_words.items():
-        items.sort(key=lambda x: (len(x["word"]), x["word"]))
+        items.sort(key=lambda x: example_key(x["word"]))
         examples[ph] = items[:MAX_EXAMPLES_PER_PHONEME]
 
-    # Dedupe + pick shortest per edge. These are plain strings (not objects)
-    # because the IPA is redundant with the edge key itself.
+    # Dedupe + pick the most recognizable per edge. Plain strings (not
+    # objects) because the IPA is redundant with the edge key itself.
     edge_examples: dict[str, list[str]] = {}
     for (g, p), words in edge_words.items():
-        uniq = sorted(set(words), key=lambda w: (len(w), w))
+        uniq = sorted(set(words), key=example_key)
         edge_examples[f"{g}|{p}"] = uniq[:MAX_EXAMPLES_PER_EDGE]
 
     mappings = [
