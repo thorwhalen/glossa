@@ -18,7 +18,19 @@ import {
  * schema drift surfaces immediately rather than silently poisoning the UI.
  */
 
-const DATA_BASE = `${import.meta.env.BASE_URL}data`;
+/**
+ * Where the data lives — NOT under the frontend's own base URL.
+ *
+ * The bundles are ~110MB of generated JSON whose source of truth is `data-prep`,
+ * not git. They used to sit in `public/data/`, which meant they were copied into
+ * the build and mirrored to the server with `rsync --delete` — one deploy from a
+ * checkout with an empty `public/data/` would have erased every byte. So the data
+ * now lives in its own root, and this is the single place that names it.
+ *
+ * Set in `.env` (read by `index.html`'s preload too, so the two cannot drift).
+ * An absolute URL here moves the data to a CDN with no code change.
+ */
+const DATA_BASE = import.meta.env.VITE_DATA_BASE;
 
 async function loadJson(path: string): Promise<unknown> {
   // `credentials: 'omit'` matches the `crossorigin=anonymous` preload hint

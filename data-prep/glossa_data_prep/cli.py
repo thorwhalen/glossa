@@ -7,6 +7,7 @@ Runs each registered source adapter in turn:
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import argh
@@ -20,13 +21,30 @@ SOURCES = {
 }
 
 
+#: Where the emitted bundles go by default. NOT ``../public/data`` any more: Vite copies
+#: ``public/`` into the build, the build is mirrored to the server with ``rsync --delete``,
+#: and these files are gitignored — so emitting there put ~110MB one clean checkout away
+#: from being erased. The data root is outside the deploy-managed tree; ``server.py`` and
+#: ``vite.config.ts`` both read the same location, and ``deploy.py cmd-push-data`` ships it.
+#:
+#: Override with ``--out-dir``, or point ``GLOSSA_APP_DATA_DIR`` at another root.
+DATA_DIR_ENV = "GLOSSA_APP_DATA_DIR"
+
+
+def default_out_dir() -> Path:
+    """``~/.local/share/glossa/data`` — mirrors ``data_dir()`` in server.py."""
+    override = os.environ.get(DATA_DIR_ENV)
+    root = Path(override).expanduser() if override else Path.home() / ".local" / "share" / "glossa"
+    return root / "data"
+
+
 def _resolve_paths(
     cache_dir: str | None, out_dir: str | None
 ) -> tuple[Path, Path]:
-    # Default layout: data-prep/cache/ and ../public/data/
+    # Default layout: data-prep/cache/ and the data root (see default_out_dir).
     here = Path(__file__).resolve().parent.parent  # data-prep/
     cache = Path(cache_dir) if cache_dir else here / "cache"
-    out = Path(out_dir) if out_dir else here.parent / "public" / "data"
+    out = Path(out_dir) if out_dir else default_out_dir()
     cache.mkdir(parents=True, exist_ok=True)
     out.mkdir(parents=True, exist_ok=True)
     return cache, out
