@@ -5,10 +5,14 @@ dist-ssr
 *.log
 .DS_Store
 
-# generated data bundles — all of public/data/ is regenerable from data-prep.
-# Keep a .gitkeep so the dir exists in checkouts for the initial `npm run dev`.
-public/data/*
-!public/data/.gitkeep
+# The generated data bundles used to live in public/data/. They must never go back:
+# Vite copies public/ into the build, the build is mirrored to the server with
+# `rsync --delete`, and these files are gitignored — so a deploy from a clean checkout
+# would have erased all ~110MB of them. They now live in their own root
+# (~/.local/share/glossa/data, see app.toml [data]) which no code deploy can touch.
+# This entry is a tripwire: if public/data/ ever reappears, git stays quiet about it,
+# so `deploy.py cmd-reconcile`'s conflated-data check is what will catch it.
+public/data/
 
 # python data-prep
 data-prep/.venv

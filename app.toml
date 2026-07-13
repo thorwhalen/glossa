@@ -1,0 +1,41 @@
+# glossa — Phoneme ↔ Grapheme Explorer.
+#
+# Intentionally public: it is a browser for open linguistic data (PHOIBLE, WikiPron,
+# Wikimedia Commons audio) and holds nothing about anybody.
+access = "public"
+display_name = "Glossa"
+description = "Browse the sound systems of the world's languages — IPA charts, grapheme mappings, and audio."
+
+# Vite builds to dist/ (its default). enlace serves this directory at /glossa/.
+frontend_dir = "dist"
+
+# The deployer builds the frontend before shipping it, so the tree that reaches the
+# server is build output and nothing else. VITE_PUBLIC_BASE is injected as "/glossa/";
+# vite.config.ts reads it and falls back to the same value, so a hand build is correct too.
+#
+# Both vars the deployer injects are declared, even though only VITE_PUBLIC_BASE is read
+# (vite.config.ts). Declaring VITE_API_BASE too keeps the build output clean — an
+# undeclared injected var warns on every deploy, and a warning nobody can act on is a
+# warning everybody learns to scroll past.
+#
+# Note VITE_DATA_BASE is NOT here: it lives in .env, because index.html needs it as well
+# and a value the deployer injects would be invisible to the preload.
+[build]
+install = ["npm", "ci", "--no-audit", "--no-fund", "--no-progress"]
+build = ["npm", "run", "build"]
+env_vars = ["VITE_PUBLIC_BASE", "VITE_API_BASE"]
+
+# Non-deploy-managed data: ~110MB of JSON bundles whose source of truth is `data-prep`,
+# NOT git. It lives at ~/.local/share/glossa/data/ (override with GLOSSA_APP_DATA_DIR),
+# is served by server.py at /api/glossa/data/, and is shipped by its own verb:
+#
+#     python deploy.py cmd-push-data --app glossa
+#
+# which never deletes. Keeping it out of frontend/ is the entire point: a frontend dir is
+# mirrored with `rsync --delete`, and `public/data/*` is gitignored — so a code deploy from
+# a clean checkout would have wiped all 110MB. Regenerate it any time with:
+#
+#     cd data-prep && uv run glossa-data-prep run-all
+[data]
+root = "glossa"
+dirs = ["data"]
