@@ -12,10 +12,18 @@ frontend_dir = "dist"
 # The deployer builds the frontend before shipping it, so the tree that reaches the
 # server is build output and nothing else. VITE_PUBLIC_BASE is injected as "/glossa/";
 # vite.config.ts reads it and falls back to the same value, so a hand build is correct too.
+#
+# Both vars the deployer injects are declared, even though only VITE_PUBLIC_BASE is read
+# (vite.config.ts). Declaring VITE_API_BASE too keeps the build output clean — an
+# undeclared injected var warns on every deploy, and a warning nobody can act on is a
+# warning everybody learns to scroll past.
+#
+# Note VITE_DATA_BASE is NOT here: it lives in .env, because index.html needs it as well
+# and a value the deployer injects would be invisible to the preload.
 [build]
 install = ["npm", "ci", "--no-audit", "--no-fund", "--no-progress"]
 build = ["npm", "run", "build"]
-env_vars = ["VITE_PUBLIC_BASE"]
+env_vars = ["VITE_PUBLIC_BASE", "VITE_API_BASE"]
 
 # Non-deploy-managed data: ~110MB of JSON bundles whose source of truth is `data-prep`,
 # NOT git. It lives at ~/.local/share/glossa/data/ (override with GLOSSA_APP_DATA_DIR),
