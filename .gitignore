@@ -25,3 +25,7 @@ data-prep/cache/
 .vscode/*
 !.vscode/extensions.json
 .idea
+
+# python bytecode
+__pycache__/
+*.py[cod]
