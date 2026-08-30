@@ -2,15 +2,14 @@
 
 Runs each registered source adapter in turn:
 
-    glossa-data-prep all        # fetch + parse + emit for every source
-    glossa-data-prep phoible    # run just one source
+    glossa-data-prep run-all              # fetch + parse + emit for every source
+    glossa-data-prep run-one phoible      # run just one source
 """
 from __future__ import annotations
 
+import argparse
 import os
 from pathlib import Path
-
-import argh
 
 from .sources import phoible, wikipron
 
@@ -75,8 +74,34 @@ def run_all(*, cache_dir: str | None = None, out_dir: str | None = None):
         run_one(name, cache_dir=cache_dir, out_dir=out_dir)
 
 
-def main():
-    argh.dispatch_commands([run_one, run_all])
+def _make_parser() -> argparse.ArgumentParser:
+    """Build the ``glossa-data-prep`` parser.
+
+    The ``"-"`` help placeholders are deliberate: they keep ``--help`` output
+    byte-identical to the previous release.
+    """
+    parser = argparse.ArgumentParser(prog="glossa-data-prep")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    def add_command(name, fn, *positionals):
+        sp = sub.add_parser(name, help=fn.__doc__, description=fn.__doc__)
+        for positional in positionals:
+            sp.add_argument(positional, help="-")
+        sp.add_argument("-c", "--cache-dir", default=None, help="-")
+        sp.add_argument("-o", "--out-dir", default=None, help="-")
+        sp.set_defaults(func=fn)
+
+    add_command("run-one", run_one, "source")
+    add_command("run-all", run_all)
+    return parser
+
+
+def main(argv=None):
+    """Parse ``argv`` (default ``sys.argv[1:]``) and run the chosen command."""
+    kwargs = vars(_make_parser().parse_args(argv))
+    fn = kwargs.pop("func")
+    kwargs.pop("command")
+    fn(**kwargs)
 
 
 if __name__ == "__main__":
