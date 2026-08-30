@@ -6,7 +6,6 @@ requires-python = ">=3.11"
 dependencies = [
     "pandas>=2.1",
     "requests>=2.31",
-    "argh>=0.31",
     "pydantic>=2.5",
     "tqdm>=4.66",
     # wordfreq provides Zipf word frequencies for ~40 languages, used to
