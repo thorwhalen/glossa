@@ -153,16 +153,16 @@ def test_french_ch_gn():
     ]
 
 
-def test_french_silent_consonants_return_none():
-    """Many French words end in silent consonants (t, s, d, x…). Without a
-    proper silent-letter model, those words can't be 1:1 aligned and the
-    segmenter returns None — the entry contributes no edges. Documenting
-    this as intentional v1 behavior.
+def test_french_silent_final_consonants():
+    """French words often end in silent consonants. The inventory folds the
+    common endings into the vowel grapheme (-aud, -aut, -ent, -ain, -eaux…;
+    fcb8b63), so those words align 1:1; an ending it does not list still
+    returns None, and the entry contributes no edges rather than bogus ones.
     """
-    # "chat" /ʃa/ has silent 't' → 4 chars, 2 phonemes, no valid split.
+    # "chaud" /ʃo/: silent 'd' folded into the grapheme "aud".
+    assert segment_word("chaud", ["ʃ", "o"], FRA_INV) == [("ch", "ʃ"), ("aud", "o")]
+    # "chat" /ʃa/: "at" is not a listed ending, so no valid split.
     assert segment_word("chat", ["ʃ", "a"], FRA_INV) is None
-    # "chaud" /ʃo/ — silent 'd'
-    assert segment_word("chaud", ["ʃ", "o"], FRA_INV) is None
 
 
 def test_german_sch():
@@ -191,6 +191,10 @@ ITA_INV = load_grapheme_inventory("ita")
 POR_INV = load_grapheme_inventory("por")
 NLD_INV = load_grapheme_inventory("nld")
 POL_INV = load_grapheme_inventory("pol")
+SWE_INV = load_grapheme_inventory("swe")
+HRV_INV = load_grapheme_inventory("hrv")
+SRP_INV = load_grapheme_inventory("srp")
+RUS_INV = load_grapheme_inventory("rus")
 
 
 def test_new_inventories_load():
@@ -258,3 +262,33 @@ def test_polish_sz_cz_rz():
     assert segment_word("czas", ["tʂ", "a", "s"], POL_INV) == [
         ("cz", "tʂ"), ("a", "a"), ("s", "s"),
     ]
+
+
+def test_swedish_polygraphs():
+    # "kung" /kɵŋ/: ng is one grapheme.
+    assert segment_word("kung", ["k", "ɵ", "ŋ"], SWE_INV) == [("k", "k"), ("u", "ɵ"), ("ng", "ŋ")]
+    # "katt" /kat/: a doubled consonant after a short vowel is one phoneme.
+    assert segment_word("katt", ["k", "a", "t"], SWE_INV) == [("k", "k"), ("a", "a"), ("tt", "t")]
+    # "sju" /ɧʉː/: the sj-sound.
+    assert segment_word("sju", ["ɧ", "ʉː"], SWE_INV) == [("sj", "ɧ"), ("u", "ʉː")]
+
+
+def test_croatian_and_serbian_digraphs():
+    assert segment_word("ljubav", ["ʎ", "u", "b", "a", "ʋ"], HRV_INV) == [("lj", "ʎ"), ("u", "u"), ("b", "b"), ("a", "a"), ("v", "ʋ")]
+    assert segment_word("konj", ["k", "o", "ɲ"], HRV_INV) == [("k", "k"), ("o", "o"), ("nj", "ɲ")]
+    # Serbian lists both alphabets: the Cyrillic љ is one letter.
+    assert segment_word("љубав", ["ʎ", "u", "b", "a", "ʋ"], SRP_INV) == [("љ", "ʎ"), ("у", "u"), ("б", "b"), ("а", "a"), ("в", "ʋ")]
+    assert segment_word("ljubav", ["ʎ", "u", "b", "a", "ʋ"], SRP_INV)[0] == ("lj", "ʎ")
+
+
+def test_russian_soft_sign_joins_its_consonant():
+    # "мать" /matʲ/: the soft sign is part of the consonant's grapheme.
+    assert segment_word("мать", ["m", "a", "tʲ"], RUS_INV) == [("м", "m"), ("а", "a"), ("ть", "tʲ")]
+    # Word-initial я is /j a/: two phonemes for one letter, so no 1:1 split.
+    assert segment_word("яма", ["j", "a", "m", "ə"], RUS_INV) is None
+
+
+def test_every_inventory_loads_sorted_longest_first():
+    for iso in ("eng", "fra", "deu", "ita", "spa", "por", "nld", "pol", "swe", "hrv", "srp", "rus"):
+        inv = load_grapheme_inventory(iso)
+        assert inv and [len(g) for g in inv] == sorted((len(g) for g in inv), reverse=True), iso

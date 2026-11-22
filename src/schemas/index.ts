@@ -124,6 +124,21 @@ export const LexiconSchema = z.object({
 export type Lexicon = z.infer<typeof LexiconSchema>;
 
 // =========================================================================
+// One word, segmented: graphemes and phonemes as parallel arrays of the same length
+// (`segment_word` in data-prep/glossa_data_prep/reconcile.py). The word is
+// `graphemes.join('')`. Not emitted in the bundles yet: the Mapping graph reads the
+// rollup below; this is the per-word shape a word-level view would read (issue #1).
+export const AlignmentEntrySchema = z
+  .object({
+    word: z.string(),
+    graphemes: z.array(z.string().min(1)),
+    phonemes: z.array(z.string().min(1)),
+  })
+  // The graphemes spell Python's `casefold()` of the word, which JS cannot reproduce
+  // exactly (ß → ss), so only the lengths are checked here.
+  .refine((e) => e.graphemes.length === e.phonemes.length, { message: 'graphemes and phonemes must have the same length' });
+export type AlignmentEntry = z.infer<typeof AlignmentEntrySchema>;
+
 // Grapheme ↔ phoneme mappings (derived from WikiPron alignments)
 // =========================================================================
 
