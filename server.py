@@ -73,14 +73,12 @@ def _mount_data() -> None:
 
 @app.get("/health")
 async def health() -> dict:
-    """Report whether the data is actually there — the only way this app can be unwell."""
-    d = data_dir()
-    languages = d / "languages.json"
-    return {
-        "ok": languages.is_file(),
-        "data_dir": str(d),
-        "has_languages_index": languages.is_file(),
-    }
+    """Report whether the data is actually there — the only way this app can be unwell.
+
+    Anonymous endpoint: it answers with booleans only, never a filesystem path.
+    """
+    has_index = (data_dir() / "languages.json").is_file()
+    return {"ok": has_index, "has_languages_index": has_index}
 
 
 try:
