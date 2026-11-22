@@ -274,7 +274,9 @@ so the app keeps loading the same shape of bundle.
 
 ### 2. Multi-character graphemes (digraphs, trigraphs, …)
 
-Current model: one written character → one phoneme. This works for
+**Status (v1 done):** words are segmented into functional graphemes with a per-language inventory (`data-prep/grapheme-inventories/`, 12 languages) and a greedy longest-match segmenter; coverage and known limits are in [`data-prep/docs/grapheme-phoneme-alignment.md`](data-prep/docs/grapheme-phoneme-alignment.md). The EM segmenter (v2) and the non-alphabetic scripts below are still open.
+
+Earlier model: one written character → one phoneme. This works for
 languages with shallow, roughly mono-character orthographies; it fails
 for French (`ai`, `eau`, `ille`, `ch`, `gn`), English (`sh`, `th`, `ch`,
 `ough`), German (`sch`, `tsch`), etc. We need the **grapheme** to be a
