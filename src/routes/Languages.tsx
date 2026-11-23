@@ -1,16 +1,39 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useMemo } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Search, X } from 'lucide-react';
 import { useLanguagesIndex } from '../hooks/useData';
 import type { LanguageSummary } from '../schemas';
 
 type SortKey = 'name' | 'phonemes' | 'iso';
+const SORT_KEYS: readonly SortKey[] = ['name', 'phonemes', 'iso'];
 
 export function Languages() {
   const { data, isLoading, error } = useLanguagesIndex();
-  const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<SortKey>('name');
-  const [showAll, setShowAll] = useState(false);
+  // The search, the sort and "all variants" live in the address (?q=&sort=&all=1): a link or a
+  // reload reopens the same list, and Back undoes a sort or the variants switch.
+  const [params, setParams] = useSearchParams();
+  const query = params.get('q') ?? '';
+  const sortParam = params.get('sort') as SortKey | null;
+  const sort: SortKey = sortParam && SORT_KEYS.includes(sortParam) ? sortParam : 'name';
+  const showAll = params.get('all') === '1';
+  const update = (patch: Record<string, string | null>, { replace = false } = {}) =>
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        for (const [k, v] of Object.entries(patch)) {
+          if (v === null || v === '') next.delete(k);
+          else next.set(k, v);
+        }
+        return next;
+      },
+      { replace },
+    );
+  const setQuery = (q: string) => update({ q }, { replace: true }); // typing refines the same entry
+  const setSort = (s: SortKey) => update({ sort: s === 'name' ? null : s });
+  const setShowAll = (on: boolean | ((was: boolean) => boolean)) => {
+    const v = typeof on === 'function' ? on(showAll) : on;
+    update({ all: v ? '1' : null });
+  };
 
   const filtered = useMemo(() => {
     if (!data) return [];
